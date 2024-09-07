@@ -1,45 +1,61 @@
+import warnings
+warnings.filterwarnings("ignore", message="xFormers is not available")
+
+
 import os
+os.environ['KMP_DUPLICATE_LIB_OK']='True'
+os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 import torch
 import torch.nn as nn
 
 import argparse
 import timm
 import numpy as np
-import utils
+from utils import read_conf, validation_accuracy
 
 import random
 import rein
 
 import dino_variant
 from sklearn.metrics import f1_score
+from data import cifar10, cub
+
+
 
 def train():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data', '-d', type=str)
+    parser.add_argument('--data', '-d', type=str, default='cub')
     parser.add_argument('--gpu', '-g', default = '0', type=str)
     parser.add_argument('--netsize', default='s', type=str)
-    parser.add_argument('--save_path', '-s', type=str)
-    parser.add_argument('--noise_rate', '-n', type=float, default=0.2)
+    # parser.add_argument('--save_path', '-s', type=str)
+    # parser.add_argument('--noise_rate', '-n', type=float, default=0.2)
     args = parser.parse_args()
 
-    config = utils.read_conf('conf/'+args.data+'.json')
+    # config = utils.read_conf('conf/'+args.data+'.json')
+    config = read_conf('conf/'+args.data+'.yaml')
     device = 'cuda:'+args.gpu
-    save_path = os.path.join(config['save_path'], args.save_path)
-    data_path = config['id_dataset']
+    save_path = os.path.join(config['save_path'])
+    data_path = config['data_root']
     batch_size = int(config['batch_size'])
     max_epoch = int(config['epoch'])
-    noise_rate = args.noise_rate
+    # noise_rate = args.noise_rate
 
     if not os.path.exists(save_path):
         os.mkdir(save_path)
 
     lr_decay = [int(0.5*max_epoch), int(0.75*max_epoch), int(0.9*max_epoch)]
 
-    if args.data == 'ham10000':
-        train_loader, valid_loader = utils.get_dataset(data_path, batch_size = batch_size)
-    elif args.data == 'aptos':
-        train_loader, valid_loader = utils.get_aptos_noise_dataset(data_path, noise_rate=noise_rate, batch_size = batch_size)
-
+    # if args.data == 'ham10000':
+    #     train_loader, valid_loader = utils.get_dataset(data_path, batch_size = batch_size)
+    # elif args.data == 'aptos':
+    #     train_loader, valid_loader = utils.get_aptos_noise_dataset(data_path, noise_rate=noise_rate, batch_size = batch_size)
+        
+    if args.data == 'cifar10':
+        train_loader, valid_loader = cifar10.get_train_valid_loader(batch_size, augment=True, random_seed=42, valid_size=0.1, shuffle=True, num_workers=4, pin_memory=True, get_val_temp=0, data_dir=data_path)
+    elif args.data == 'cub':
+        train_loader, valid_loader = cub.get_train_val_loader(data_path, batch_size=32, scale_size=256, crop_size=224, num_workers=8, pin_memory=True)
+    
+        
     if args.netsize == 's':
         model_load = dino_variant._small_dino
         variant = dino_variant._small_variant
@@ -106,7 +122,7 @@ def train():
         total = 0
         correct = 0
 
-        valid_accuracy = utils.validation_accuracy(model, valid_loader, device)
+        valid_accuracy = validation_accuracy(model, valid_loader, device)
         if epoch >= max_epoch-10:
             avg_accuracy += valid_accuracy 
         scheduler.step()

@@ -1,3 +1,6 @@
+import warnings
+warnings.filterwarnings("ignore", message="xFormers is not available")
+
 import os
 import torch
 import torch.nn as nn
@@ -5,7 +8,7 @@ import torch.nn as nn
 import argparse
 import timm
 import numpy as np
-from utils import read_conf, validation_accuracy
+from utils import read_conf, validation_accuracy, calculate_flops
 
 import random
 import rein
@@ -14,11 +17,15 @@ import dino_variant
 from sklearn.metrics import f1_score
 from data import cifar10
 
+
+
+
 def train():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data', '-d', type=str, default='cifar10')
+    parser.add_argument('--data', '-d', type=str, default='ham10000')
     parser.add_argument('--gpu', '-g', default = '0', type=str)
     parser.add_argument('--netsize', default='s', type=str)
+    parser.add_argument('--save_path', '-s', type=str)
     # parser.add_argument('--save_path', '-s', type=str)
     # parser.add_argument('--noise_rate', '-n', type=float, default=0.2)
     args = parser.parse_args()
@@ -26,11 +33,12 @@ def train():
     # config = utils.read_conf('conf/'+args.data+'.json')
     config = read_conf('conf/'+args.data+'.yaml')
     device = 'cuda:'+args.gpu
-    save_path = os.path.join(config['save_path'])
+    save_path = os.path.join(config['save_path'], args.save_path)
     data_path = config['data_root']
     batch_size = int(config['batch_size'])
     max_epoch = int(config['epoch'])
     # noise_rate = args.noise_rate
+
     if not os.path.exists(save_path):
         os.mkdir(save_path)
 
@@ -40,9 +48,30 @@ def train():
     #     train_loader, valid_loader = utils.get_dataset(data_path, batch_size = batch_size)
     # elif args.data == 'aptos':
     #     train_loader, valid_loader = utils.get_aptos_noise_dataset(data_path, noise_rate=noise_rate, batch_size = batch_size)
-
+        
     if args.data == 'cifar10':
         train_loader, valid_loader = cifar10.get_train_valid_loader(batch_size, augment=True, random_seed=42, valid_size=0.1, shuffle=True, num_workers=4, pin_memory=True, get_val_temp=0, data_dir=data_path)
+    elif args.data == 'cub':
+        train_loader, valid_loader = cub.get_train_val_loader(data_path, batch_size=32, scale_size=256, crop_size=224, num_workers=8, pin_memory=True)
+    elif args.data == 'ham10000':
+        # Train DataLoader
+        train_loader, _ = ham10000.create_dataloader(
+            annotations_file=os.path.join(data_path, 'ISIC2018_Task3_Training_GroundTruth.csv'),
+            img_dir=os.path.join(data_path, 'train/'),
+            batch_size=batch_size,
+            shuffle=True,
+            transform_mode='augment'
+        )
+
+        # Validation DataLoader
+        valid_loader, _ = ham10000.create_dataloader(
+            annotations_file=os.path.join(data_path, 'ISIC2018_Task3_Validation_GroundTruth.csv'),
+            img_dir=os.path.join(data_path, 'valid/'),
+            batch_size=batch_size,
+            shuffle=False,  
+            transform_mode='base'  
+        )
+        
         
 
     if args.netsize == 's':
@@ -67,7 +96,10 @@ def train():
     model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
     model.to(device)
     
-    # print(model)
+    print(model)
+    
+    calculate_flops(model, input_size=(1, 3, 224, 224))
+    
     criterion = torch.nn.CrossEntropyLoss()
     model.eval()
     
@@ -86,6 +118,8 @@ def train():
         correct = 0
         for batch_idx, (inputs, targets) in enumerate(train_loader):
             inputs, targets = inputs.to(device), targets.to(device)
+            if targets.ndim > 1 and targets.size(1) > 1:
+                targets = torch.argmax(targets, dim=1)
 
             optimizer.zero_grad()            
             features = model.forward_features1(inputs)
