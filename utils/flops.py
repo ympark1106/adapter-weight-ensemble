@@ -16,6 +16,10 @@ def calculate_flops(model, input_size=(1, 3, 224, 224)):
     # Generate a random input tensor with the given size
     inputs = torch.randn(input_size).to(next(model.parameters()).device)
     
+        # Add a batch dimension if the input doesn't have one
+    if inputs.dim() == 3:  # Check if there are only 3 dimensions (no batch dimension)
+        inputs = inputs.unsqueeze(0)  # Add batch dimension: (1, 3, 224, 224)
+    
     # Calculate FLOPs
     flops = FlopCountAnalysis(model, inputs)
     
