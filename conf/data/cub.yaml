@@ -6,7 +6,7 @@ scale_size: 256
 crop_size: 224
 epoch: 100
 num_classes: 200
-save_path: ./checkpoints_cub
+save_path: ./checkpoints/checkpoints_cub
 
 object:
   trainval:

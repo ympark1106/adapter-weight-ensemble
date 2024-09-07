@@ -1,0 +1,11 @@
+name: mndcg
+alpha: 0.1 #0.1
+num_classes: 200 # cifar10 10 / tiny 200 / ham10000 7 / cub 200 
+ignore_index: -100
+
+object:
+  _target_: losses.RankMixup_MNDCG
+  alpha: ${loss.alpha}
+  num_classes: ${loss.num_classes}
+  ignore_index: ${loss.ignore_index}
+

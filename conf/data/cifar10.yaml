@@ -5,7 +5,7 @@ batch_size: 32
 num_workers: 4
 epoch: 100
 num_classes: 10
-save_path: ./checkpoints_cifar10
+save_path: ./checkpoints/checkpoints_cifar10
 
 object:
   trainval:
