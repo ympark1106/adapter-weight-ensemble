@@ -5,36 +5,69 @@ import torch.nn as nn
 import argparse
 import timm
 import numpy as np
-import utils
+from utils import read_conf, validation_accuracy
 
 import random
 import rein
 
 import dino_variant
-import disease_loader
+from data import cifar10, cub, ham10000
+
+
+def count_trainable_params(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 def train():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data', '-d', type=str)
+    parser.add_argument('--data', '-d', type=str, default='ham10000')
     parser.add_argument('--gpu', '-g', default = '0', type=str)
     parser.add_argument('--netsize', default='s', type=str)
     parser.add_argument('--save_path', '-s', type=str)
+    # parser.add_argument('--save_path', '-s', type=str)
+    # parser.add_argument('--noise_rate', '-n', type=float, default=0.2)
     args = parser.parse_args()
 
+    # config = utils.read_conf('conf/'+args.data+'.json')
+    config = read_conf('conf/data/'+args.data+'.yaml')
     device = 'cuda:'+args.gpu
-    save_path = os.path.join('checkpoints', args.save_path)
-    data_path = './data/'
-    batch_size = 32
-    max_epoch = 50
-    num_classes = 14
+    save_path = os.path.join(config['save_path'], args.save_path)
+    data_path = config['data_root']
+    batch_size = int(config['batch_size'])
+    max_epoch = int(config['epoch'])
+    # noise_rate = args.noise_rate
 
     if not os.path.exists(save_path):
         os.mkdir(save_path)
 
     lr_decay = [int(0.5*max_epoch), int(0.75*max_epoch), int(0.9*max_epoch)]
 
+    # if args.data == 'ham10000':
+    #     train_loader, valid_loader = utils.get_dataset(data_path, batch_size = batch_size)
+    # elif args.data == 'aptos':
+    #     train_loader, valid_loader = utils.get_aptos_noise_dataset(data_path, noise_rate=noise_rate, batch_size = batch_size)
+        
+    if args.data == 'cifar10':
+        train_loader, valid_loader = cifar10.get_train_valid_loader(batch_size, augment=True, random_seed=42, valid_size=0.1, shuffle=True, num_workers=4, pin_memory=True, get_val_temp=0, data_dir=data_path)
+    elif args.data == 'cub':
+        train_loader, valid_loader = cub.get_train_val_loader(data_path, batch_size=32, scale_size=256, crop_size=224, num_workers=8, pin_memory=True)
+    elif args.data == 'ham10000':
+        # Train DataLoader
+        train_loader, _ = ham10000.create_dataloader(
+            annotations_file=os.path.join(data_path, 'ISIC2018_Task3_Training_GroundTruth.csv'),
+            img_dir=os.path.join(data_path, 'train/'),
+            batch_size=batch_size,
+            shuffle=True,
+            transform_mode='augment'
+        )
 
-    train_loader, valid_loader = disease_loader.get_loader(data_path, batch_size = batch_size)
+        # Validation DataLoader
+        valid_loader, _ = ham10000.create_dataloader(
+            annotations_file=os.path.join(data_path, 'ISIC2018_Task3_Validation_GroundTruth.csv'),
+            img_dir=os.path.join(data_path, 'valid/'),
+            batch_size=batch_size,
+            shuffle=False,  
+            transform_mode='base'  
+        )
         
     if args.netsize == 's':
         model_load = dino_variant._small_dino
@@ -42,10 +75,17 @@ def train():
 
 
     model = torch.hub.load('facebookresearch/dinov2', model_load)
-    model.linear = nn.Linear(variant['embed_dim'], num_classes)
+    for param in model.parameters():
+        param.requires_grad = False
+    model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
+    model.linear.requires_grad = True
     model.to(device)
     
     print(model)
+    
+    num_params = count_trainable_params(model)
+    print(f"Number of trainable parameters: {num_params}")
+    
     criterion = torch.nn.CrossEntropyLoss()
     model.eval()
     
