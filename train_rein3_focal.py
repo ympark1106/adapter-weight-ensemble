@@ -102,9 +102,9 @@ def train():
 
     model = rein.ReinsDinoVisionTransformer_3_head(
         **variant,
-        token_lengths = [33, 33, 33]
+        # token_lengths = [33, 33, 33]
         # token_lengths= [85, 85, 85]
-        # token_lengths = [100, 100, 100]
+        token_lengths = [100, 100, 100]
         # token_lengths= [256, 256, 256]
     )
     set_requires_grad(model, ["reins1", "reins2", "reins3",  "linear"])

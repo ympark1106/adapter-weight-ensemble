@@ -34,7 +34,7 @@ def set_requires_grad(model, layers_to_train):
             
 def train():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data', '-d', type=str, default='cub')
+    parser.add_argument('--data', '-d', type=str, default='ham10000')
     parser.add_argument('--gpu', '-g', default = '0', type=str)
     parser.add_argument('--netsize', default='s', type=str)
     parser.add_argument('--save_path', '-s', type=str)
@@ -56,11 +56,7 @@ def train():
 
     lr_decay = [int(0.5*max_epoch), int(0.75*max_epoch), int(0.9*max_epoch)]
 
-    # if args.data == 'ham10000':
-    #     train_loader, valid_loader = utils.get_dataset(data_path, batch_size = batch_size)
-    # elif args.data == 'aptos':
-    #     train_loader, valid_loader = utils.get_aptos_noise_dataset(data_path, noise_rate=noise_rate, batch_size = batch_size)
-        
+
     if args.data == 'cifar10':
         train_loader, valid_loader = cifar10.get_train_valid_loader(batch_size, augment=True, random_seed=42, valid_size=0.1, shuffle=True, num_workers=4, pin_memory=True, get_val_temp=0, data_dir=data_path)
     elif args.data == 'cub':
@@ -131,7 +127,10 @@ def train():
         total = 0
         correct = 0
         for batch_idx, (inputs, targets) in enumerate(train_loader):
-            inputs, targets = inputs.to(device), targets.to(device)            
+            inputs, targets = inputs.to(device), targets.to(device)           
+            
+            if targets.ndim > 1 and targets.size(1) > 1:
+                targets = torch.argmax(targets, dim=1)
             
             optimizer.zero_grad()
             

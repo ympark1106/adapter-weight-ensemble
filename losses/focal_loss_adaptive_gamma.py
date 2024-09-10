@@ -31,7 +31,7 @@ for p in ps:
     i += 1
 
 class FocalLossAdaptive(nn.Module):
-    def __init__(self, gamma=0, ignore_index=-100, size_average=False, device=None):
+    def __init__(self, gamma=0, ignore_index=-100, size_average=False, device='cuda:0'): #device 
         super(FocalLossAdaptive, self).__init__()
         self.size_average = size_average
         self.gamma = gamma
@@ -64,6 +64,7 @@ class FocalLossAdaptive(nn.Module):
             index = torch.nonzero(target.squeeze() != self.ignore_index).squeeze()
             input = input[index, :]
             target = target[index, :]
+            input, target = input.to(self.device), target.to(self.device)
 
         logpt = F.log_softmax(input, dim=1)
         logpt = logpt.gather(1,target)

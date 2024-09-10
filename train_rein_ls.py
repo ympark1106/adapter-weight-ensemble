@@ -11,7 +11,7 @@ import torch.nn as nn
 import argparse
 import timm
 import numpy as np
-from utils import read_conf, validation_accuracy #, calculate_flops
+from utils import read_conf, validation_accuracy, calculate_flops
 
 import random
 import rein
@@ -19,7 +19,7 @@ import rein
 import dino_variant
 from sklearn.metrics import f1_score
 from data import cifar10, cub, ham10000
-from losses import RankMixup_MNDCG, RankMixup_MRL, focal_loss, focal_loss_adaptive_gamma
+from losses import RankMixup_MNDCG, RankMixup_MRL, focal_loss, focal_loss_adaptive_gamma, label_smoothing
 
 def count_trainable_params(model):
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -34,7 +34,7 @@ def set_requires_grad(model, layers_to_train):
             
 def train():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data', '-d', type=str, default='cub')
+    parser.add_argument('--data', '-d', type=str, default='ham10000')
     parser.add_argument('--gpu', '-g', default = '0', type=str)
     parser.add_argument('--netsize', default='s', type=str)
     parser.add_argument('--save_path', '-s', type=str)
@@ -70,6 +70,7 @@ def train():
             shuffle=True,
             transform_mode='augment'
         )
+
         # Validation DataLoader
         valid_loader, _ = ham10000.create_dataloader(
             annotations_file=os.path.join(data_path, 'ISIC2018_Task3_Validation_GroundTruth.csv'),
@@ -109,9 +110,7 @@ def train():
     num_params = count_trainable_params(model)
     print(f"Number of trainable parameters: {num_params}")
     
-    # criterion = torch.nn.CrossEntropyLoss()
-    # criterion = focal_loss.FocalLoss(gamma=3) #gamma 커지면 easy sample에 대한 loss 감소
-    criterion = focal_loss_adaptive_gamma.FocalLossAdaptive()
+    criterion = torch.nn.CrossEntropyLoss()
     model.eval()
 
     

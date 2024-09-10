@@ -24,7 +24,9 @@ def compute_acc_bin(conf_thresh_lower, conf_thresh_upper, conf, pred, true):
     if len(filtered_tuples) < 1:
         return 0,0,0
     else:
-        correct = len([x for x in filtered_tuples if x[0] == x[1]])  # How many correct labels
+        # correct = len([x for x in filtered_tuples if x[0] == x[1]])  # How many correct labels
+        correct = len([x for x in filtered_tuples if np.array_equal(x[0], x[1])])
+
         len_bin = len(filtered_tuples)  # How many elements falls into given bin
         avg_conf = sum([x[2] for x in filtered_tuples]) / len_bin  # Avg confidence of BIN
         accuracy = float(correct)/len_bin  # accuracy of BIN

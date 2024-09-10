@@ -18,7 +18,7 @@ import rein
 import dino_variant
 from sklearn.metrics import f1_score
 from data import cifar10, cub, ham10000
-from losses import RankMixup_MNDCG  # RankMixup 손실 함수 가져오기
+from losses import RankMixup_MNDCG  
 
 from fvcore.nn import FlopCountAnalysis
 

@@ -1,10 +1,7 @@
 import warnings
 warnings.filterwarnings("ignore", message="xFormers is not available")
 
-
 import os
-os.environ['KMP_DUPLICATE_LIB_OK']='True'
-os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 import torch
 import torch.nn as nn
 
@@ -19,12 +16,23 @@ import rein
 import dino_variant
 from sklearn.metrics import f1_score
 from data import cifar10, cub, ham10000
+from losses import RankMixup_MNDCG, RankMixup_MRL, focal_loss, focal_loss_adaptive_gamma
 
+
+def count_trainable_params(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+def set_requires_grad(model, layers_to_train):
+    for name, param in model.named_parameters():
+        if any(layer in name for layer in layers_to_train):
+            param.requires_grad = True
+        else:
+            param.requires_grad = False
 
 
 def train():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data', '-d', type=str, default='ham10000')
+    parser.add_argument('--data', '-d', type=str, default='cub')
     parser.add_argument('--gpu', '-g', default = '0', type=str)
     parser.add_argument('--netsize', default='s', type=str)
     parser.add_argument('--save_path', '-s', type=str)
@@ -33,7 +41,7 @@ def train():
     args = parser.parse_args()
 
     # config = utils.read_conf('conf/'+args.data+'.json')
-    config = read_conf('conf/'+args.data+'.yaml')
+    config = read_conf('conf/data/'+args.data+'.yaml')
     device = 'cuda:'+args.gpu
     save_path = os.path.join(config['save_path'], args.save_path)
     data_path = config['data_root']
@@ -54,7 +62,7 @@ def train():
     if args.data == 'cifar10':
         train_loader, valid_loader = cifar10.get_train_valid_loader(batch_size, augment=True, random_seed=42, valid_size=0.1, shuffle=True, num_workers=4, pin_memory=True, get_val_temp=0, data_dir=data_path)
     elif args.data == 'cub':
-        train_loader, valid_loader = cub.get_train_val_loader(data_path, batch_size=32, scale_size=256, crop_size=224, num_workers=8, pin_memory=True)
+        train_loader, valid_loader = cub.get_train_val_loader(data_path, batch_size=32, scale_size=256, crop_size=224, num_workers=4, pin_memory=True)
     elif args.data == 'ham10000':
         # Train DataLoader
         train_loader, _ = ham10000.create_dataloader(
@@ -73,8 +81,9 @@ def train():
             shuffle=False,  
             transform_mode='base'  
         )
-    
         
+        
+
     if args.netsize == 's':
         model_load = dino_variant._small_dino
         variant = dino_variant._small_variant
@@ -88,25 +97,36 @@ def train():
 
     model = torch.hub.load('facebookresearch/dinov2', model_load)
     dino_state_dict = model.state_dict()
+    
+    # variant['embed_dim'] = int(variant['embed_dim'] * 0.33) # 각 head의 embed_dim을 1/3로 줄임
 
-    model = rein.ReinsDinoVisionTransformer(
-        **variant
+    model = rein.ReinsDinoVisionTransformer_3_head(
+        **variant,
+        token_lengths = [33, 33, 33]
+        # token_lengths= [85, 85, 85]
+        # token_lengths = [100, 100, 100]
+        # token_lengths= [256, 256, 256]
     )
+    set_requires_grad(model, ["reins1", "reins2", "reins3",  "linear"])
     model.load_state_dict(dino_state_dict, strict=False)
     model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
     model.to(device)
     
     print(model)
     
-    calculate_flops(model, input_size=(1, 3, 224, 224))
+    num_params = count_trainable_params(model)
+    print(f"Number of trainable parameters: {num_params}")
+    # calculate_flops(model, input_size=(1, 3, 224, 224))
     
-    criterion = torch.nn.CrossEntropyLoss()
+    # criterion = torch.nn.CrossEntropyLoss()
+    # criterion = focal_loss.FocalLoss(gamma=3) #gamma 커지면 easy sample에 대한 loss 감소
+    criterion = focal_loss_adaptive_gamma.FocalLossAdaptive()
     model.eval()
     
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay = 1e-5)
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, lr_decay)
     saver = timm.utils.CheckpointSaver(model, optimizer, checkpoint_dir= save_path, max_history = 1) 
-    print(train_loader.dataset[0][0].shape)
+    # print(train_loader.dataset[0][0].shape)
 
     # f = open(os.path.join(save_path, 'epoch_acc.txt'), 'w')
     avg_accuracy = 0.0
@@ -120,20 +140,29 @@ def train():
             inputs, targets = inputs.to(device), targets.to(device)
             if targets.ndim > 1 and targets.size(1) > 1:
                 targets = torch.argmax(targets, dim=1)
-            
-            optimizer.zero_grad()
-            
-            features = model.forward_features(inputs)
+
+            optimizer.zero_grad()            
+            features = model.forward_features1(inputs)
             features = features[:, 0, :]
-            outputs = model.linear(features)
-            loss = criterion(outputs, targets)
+            outputs1 = model.linear(features)
+
+            features = model.forward_features2(inputs)
+            features = features[:, 0, :]
+            outputs2 = model.linear(features)
+
+            features = model.forward_features3(inputs)
+            features = features[:, 0, :]
+            outputs3 = model.linear(features)
+
+            loss = criterion(outputs1, targets) + criterion(outputs2, targets) + criterion(outputs3, targets)
             loss.backward()            
+
             optimizer.step()
 
+            outputs = outputs1 + outputs1 + outputs3
             total_loss += loss
             total += targets.size(0)
-            _, predicted = outputs[:len(targets)].max(1)        
-            # _, predicted = outputs.max(1)    
+            _, predicted = outputs[:len(targets)].max(1)            
             correct += predicted.eq(targets).sum().item()            
             print('\r', batch_idx, len(train_loader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                         % (total_loss/(batch_idx+1), 100.*correct/total, correct, total), end = '')
@@ -148,7 +177,7 @@ def train():
         total = 0
         correct = 0
 
-        valid_accuracy = validation_accuracy(model, valid_loader, device)
+        valid_accuracy = validation_accuracy(model, valid_loader, device, mode='rein3')
         if epoch >= max_epoch-10:
             avg_accuracy += valid_accuracy 
         scheduler.step()
