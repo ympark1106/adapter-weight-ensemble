@@ -1,6 +1,6 @@
 name: cub
 
-data_root: C:\Users\USER\Workspace\VFMs-Adapters-Ensemble\CUB_200_2011
+data_root: /home/youmin/workspace/VFMs-Adapters-Ensemble/CUB_200_2011
 batch_size: 32
 scale_size: 256
 crop_size: 224

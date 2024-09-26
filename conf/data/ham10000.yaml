@@ -1,6 +1,6 @@
 name: ham10000
 
-data_root: C:\Users\USER\Workspace\VFMs-Adapters-Ensemble\ham10000\
+data_root: /home/youmin/workspace/VFMs-Adapters-Ensemble/ham10000/
 batch_size: 32
 epoch: 100
 num_classes: 7
