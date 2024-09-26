@@ -2,6 +2,10 @@ import warnings
 warnings.filterwarnings("ignore", message="xFormers is not available")
 
 import os
+os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["TORCH_USE_CUDA_DSA"] = '1'
+
 import torch
 import torch.nn as nn
 
@@ -12,6 +16,7 @@ from utils import read_conf, validation_accuracy
 
 import random
 import rein
+import operator
 
 import dino_variant
 import evaluation
@@ -25,24 +30,6 @@ def rein_forward(model, inputs):
 
     return output
 
-# def get_model_from_sd(state_dict, base_model):
-#     feature_dim = state_dict['linear.weight'].shape[1]
-#     # num_classes = state_dict['linear.weight'].shape[0]
-#     base_model_params = {
-#         'embed_dim': feature_dim,
-#         'depth': 12,
-#         'patch_size': 14,
-#     }
-#     model = rein.ReinsDinoVisionTransformer(
-#         **base_model_params
-#     )
-#     for p in model.parameters():
-#         p.data = p.data.float()
-#     model.load_state_dict(state_dict)
-#     model = model.cuda()
-#     devices = [x for x in range(torch.cuda.device_count())]
-#     return torch.nn.DataParallel(model, device_ids=devices)
-
 
 def train():
     parser = argparse.ArgumentParser()
@@ -52,9 +39,9 @@ def train():
     parser.add_argument('--type', '-t', default= 'rein', type=str)
     args = parser.parse_args()
 
-    save_path1 = 'with_reins_3_100'
-    save_path2 = 'with_reins_3_100_focal'
-    save_path3 = 'with_reins_3_100_adaptfocal'
+    save_path1 = 'adapter1'
+    save_path2 = 'adapter2'
+    save_path3 = 'adapter3'
 
     config = read_conf(os.path.join('conf', 'data', f'{args.data}.yaml'))
 
@@ -62,9 +49,9 @@ def train():
     data_path = config['data_root']
     batch_size = int(config['batch_size'])
     
-    save_path1 = os.path.join(config['save_path'], 'with_reins_3_100')
-    save_path2 = os.path.join(config['save_path'], 'with_reins_3_100_focal')
-    save_path3 = os.path.join(config['save_path'], 'with_reins_3_100_adaptfocal')
+    save_path1 = os.path.join(config['save_path'], 'adapter2')
+    save_path2 = os.path.join(config['save_path'], 'adapter22')
+    save_path3 = os.path.join(config['save_path'], 'adapter33')
 
     if args.data == 'cifar10':
         test_loader = cifar10.get_train_valid_loader(
@@ -125,43 +112,122 @@ def train():
     model1.eval()
     model2.eval()
     model3.eval()
-    
-    test_accuracy1 = validation_accuracy(model1, test_loader, device, mode=args.type)
-    test_accuracy_list.append(test_accuracy1)
-    test_accuracy2 = validation_accuracy(model2, test_loader, device, mode=args.type)
-    test_accuracy_list.append(test_accuracy2)
-    test_accuracy3 = validation_accuracy(model3, test_loader, device, mode=args.type)
-    test_accuracy_list.append(test_accuracy3)
-
-    print('test acc:', test_accuracy_list)
 
 
-        # Step 3: Uniform Soup.
-    # if args.uniform_soup:
-    #     if os.path.exists(UNIFORM_SOUP_RESULTS_FILE):
-    #         os.remove(UNIFORM_SOUP_RESULTS_FILE)
+    model_dict = {
+        "model1": model1,
+        "model2": model2,
+        "model3": model3,
+        "test_accuracy1": None,
+        "test_accuracy2": None,
+        "test_accuracy3": None,
+        # 'ece1': 0.078,
+        # 'ece2': 0.022 ,
+        # 'ece3': 0.083,
+    }
 
-    # create the uniform soup sequentially to not overload memory
-    for j, model_path in enumerate(model_paths):
-
-        # print(f'Adding model {j+1} of {len(models)} to uniform soup.')
-        # print(model_path)
-        assert os.path.exists(model_path)
-        checkpoint = torch.load(model_path)
-        # print("Checkpoint pos_embed shape:", checkpoint['state_dict']['pos_embed'].shape)
-        state_dict = checkpoint['state_dict']
-        # print(state_dict.keys())
-        if j == 0:
-            uniform_soup = {k: v * (1./len(models)) for k, v in state_dict.items() if isinstance(v, torch.Tensor)}
-        else:
-            uniform_soup = {k: v * (1./len(models)) + uniform_soup[k] for k, v in state_dict.items() if isinstance(v, torch.Tensor)}
-        
-        print("uniform soup pos_embed shape:", uniform_soup['pos_embed'].shape)
-        
-            
-    model1.load_state_dict(uniform_soup)
-
+    # ## validation
     model1.eval()
+    model2.eval()
+    model3.eval()
+
+    model_dict["test_accuracy1"] = validation_accuracy(model1, test_loader, device, mode=args.type)
+    model_dict["test_accuracy2"] = validation_accuracy(model2, test_loader, device, mode=args.type)
+    model_dict["test_accuracy3"] = validation_accuracy(model3, test_loader, device, mode=args.type)
+    
+    print(f"Model 1 Test Accuracy: {model_dict['test_accuracy1']}")
+    print(f"Model 2 Test Accuracy: {model_dict['test_accuracy2']}")
+    print(f"Model 3 Test Accuracy: {model_dict['test_accuracy3']}")
+
+
+    # #Uniform Soup
+    # for j, model_path in enumerate(model_paths):
+
+    #     print(f'Adding model {j+1} of {len(models)} to uniform soup.')
+    #     assert os.path.exists(model_path)
+    #     checkpoint = torch.load(model_path)
+    #     state_dict = checkpoint['state_dict']
+    #     # for k, v in state_dict.items():
+    #     #     if isinstance(v, torch.Tensor):
+    #     #         print(f"Averaging layer: {k}")
+    #     if j == 0:
+    #         uniform_soup = {k: v * (1./len(models)) for k, v in state_dict.items() if isinstance(v, torch.Tensor)}
+    #     else:
+    #         uniform_soup = {k: v * (1./len(models)) + uniform_soup[k] for k, v in state_dict.items() if isinstance(v, torch.Tensor)}
+            
+            
+    # model1.load_state_dict(uniform_soup)
+    # model1.eval()
+    
+    # test_accuracy = validation_accuracy(model1, test_loader, device, mode=args.type)
+    # print('test acc:', test_accuracy)
+
+    # outputs = []
+    # targets = []
+    # with torch.no_grad():
+    #     for batch_idx, (inputs, target) in enumerate(test_loader):
+    #         inputs, target = inputs.to(device), target.to(device)
+    #         output = rein_forward(model1, inputs)
+    #         outputs.append(output.cpu())
+    #         targets.append(target.cpu())
+    # outputs = torch.cat(outputs).numpy()
+    # targets = torch.cat(targets).numpy()
+    # targets = targets.astype(int)
+    # evaluation.evaluate(outputs, targets, verbose=True)
+            
+            
+            
+    # Greedy Soup     
+    sorted_models = sorted(
+        [(model_dict["model1"], model_dict["test_accuracy1"]),
+        (model_dict["model2"], model_dict["test_accuracy2"]),
+        (model_dict["model3"], model_dict["test_accuracy3"])],
+        key=lambda x: x[1],  
+        reverse=True  
+    )
+    
+    max_accuracy = sorted_models[0][1]
+
+    for idx, (model, accuracy) in enumerate(sorted_models, 1):
+        print(f"Model {idx} has accuracy {accuracy:.4f}")
+    
+
+    greedy_soup_params = sorted_models[0][0].state_dict() 
+    greedy_soup_ingredients = [sorted_models[0][0]]
+
+    for i in range(1, len(models)):
+        print(f'Testing model {i} of {len(models)}')
+
+        new_ingredient_params = sorted_models[i][0].state_dict()
+        num_ingredients = len(greedy_soup_ingredients)
+        print(f'Num ingredients: {num_ingredients}')
+        
+        potential_greedy_soup_params = {
+            k : greedy_soup_params[k].clone() * (num_ingredients / (num_ingredients + 1.)) + 
+                new_ingredient_params[k].clone() * (1. / (num_ingredients + 1))
+            for k in new_ingredient_params
+        }
+    
+        sorted_models[0][0].load_state_dict(potential_greedy_soup_params)
+        sorted_models[0][0].eval()
+        
+        held_out_val_accuracy = validation_accuracy(sorted_models[0][0], test_loader, device, mode=args.type)
+        
+    
+        # If accuracy on the held-out val set increases, add the new model to the greedy soup.
+        print(f'Potential greedy soup val acc {held_out_val_accuracy}, best so far {max_accuracy}.')
+        if held_out_val_accuracy > max_accuracy:
+            greedy_soup_ingredients.append(sorted_models[i])
+            max_accuracy = held_out_val_accuracy
+            greedy_soup_params = potential_greedy_soup_params
+            # print(f'Adding to soup. New soup is {greedy_soup_ingredients}')
+            
+    
+    model1.load_state_dict(greedy_soup_params)
+    model1.eval()
+    
+    
+    
     test_accuracy = validation_accuracy(model1, test_loader, device, mode=args.type)
     print('test acc:', test_accuracy)
 
