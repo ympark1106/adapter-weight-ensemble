@@ -5,20 +5,22 @@ warnings.filterwarnings("ignore", message="xFormers is not available")
 import os
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["TORCH_USE_CUDA_DSA"] = '1'
 import torch
 import torch.nn as nn
 
 import argparse
 import timm
 import numpy as np
-from utils import read_conf, validation_accuracy, calculate_flops
+from utils import read_conf, validation_accuracy
 
 import random
 import rein
 
 import dino_variant
 from sklearn.metrics import f1_score
-from data import cifar10, cub, ham10000
+from data import cifar10, cifar100, cub, ham10000
 from losses import RankMixup_MNDCG, RankMixup_MRL
 
 def count_trainable_params(model):
@@ -34,7 +36,7 @@ def set_requires_grad(model, layers_to_train):
             
 def train():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data', '-d', type=str, default='ham10000')
+    parser.add_argument('--data', '-d', type=str, default='cub')
     parser.add_argument('--gpu', '-g', default = '0', type=str)
     parser.add_argument('--netsize', default='s', type=str)
     parser.add_argument('--save_path', '-s', type=str)
@@ -59,6 +61,8 @@ def train():
 
     if args.data == 'cifar10':
         train_loader, valid_loader = cifar10.get_train_valid_loader(batch_size, augment=True, random_seed=42, valid_size=0.1, shuffle=True, num_workers=4, pin_memory=True, get_val_temp=0, data_dir=data_path)
+    elif args.data == 'cifar100':
+        train_loader, valid_loader = cifar100.get_train_valid_loader(data_dir=data_path, augment=True, batch_size=32, valid_size=0.1, random_seed=42, shuffle=True, num_workers=4, pin_memory=True)
     elif args.data == 'cub':
         train_loader, valid_loader = cub.get_train_val_loader(data_path, batch_size=32, scale_size=256, crop_size=224, num_workers=8, pin_memory=True)
     elif args.data == 'ham10000':

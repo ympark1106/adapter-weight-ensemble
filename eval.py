@@ -2,6 +2,10 @@ import warnings
 warnings.filterwarnings("ignore", message="xFormers is not available")
 
 import os
+os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["TORCH_USE_CUDA_DSA"] = '1'
+
 import torch
 import torch.nn as nn
 
@@ -15,7 +19,7 @@ import rein
 
 import dino_variant
 import evaluation
-from data import cifar10, cub, ham10000
+from data import cifar10, cifar100, cub, ham10000
 
 
 def rein_forward(model, inputs):
@@ -24,6 +28,7 @@ def rein_forward(model, inputs):
     output = torch.softmax(output, dim=1)
 
     return output
+
 
 def rein3_forward(model, inputs):
     f = model.forward_features1(inputs)
@@ -45,6 +50,20 @@ def rein3_forward(model, inputs):
     return (outputs1 + outputs2 + outputs3)/3
 
 
+def ensemble_forward(models, inputs):
+    ensemble_output = 0
+    
+    for model in models:
+        output = model.forward_features(inputs)[:, 0, :]
+        output = model.linear(output)
+        output = torch.softmax(output, dim=1)
+        ensemble_output += output
+    
+    # Average the outputs
+    ensemble_output /= len(models)
+    return ensemble_output
+
+
 def train():
     parser = argparse.ArgumentParser()
     parser.add_argument('--data', '-d', type=str, default='cub')
@@ -57,6 +76,7 @@ def train():
 
 
     config = read_conf('conf/data/'+args.data+'.yaml')
+
     device = 'cuda:'+args.gpu
     save_path = os.path.join(config['save_path'], args.save_path)
     data_path = config['data_root']
@@ -68,7 +88,9 @@ def train():
 
 
     if args.data == 'cifar10':
-        test_loader = cifar10.get_train_valid_loader(batch_size, augment=True, random_seed=42, valid_size=0.1, shuffle=True, num_workers=4, pin_memory=True, get_val_temp=0, data_dir=data_path)
+        test_loader = cifar10.get_test_loader(batch_size, shuffle=True, num_workers=4, pin_memory=True, get_val_temp=0, data_dir=data_path)
+    elif args.data == 'cifar100':
+        test_loader = cifar100.get_test_loader(data_dir=data_path, batch_size=32, shuffle=True, num_workers=4, pin_memory=True)
     elif args.data == 'cub':
         test_loader = cub.get_test_loader(data_path, batch_size=32, scale_size=256, crop_size=224, num_workers=4, pin_memory=True)
     elif args.data == 'ham10000':
@@ -98,10 +120,8 @@ def train():
     if args.type == 'rein3':
         model = rein.ReinsDinoVisionTransformer_3_head(
             **variant,
-            token_lengths = [33, 33, 33]
-            # token_lengths= [85, 85, 85]
-            # token_lengths= [100, 100, 100]
-            # token_lengths= [256, 256, 256]
+            # token_lengths = [33, 33, 33]
+            token_lengths= [100, 100, 100]
         )
     model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
     model.load_state_dict(dino_state_dict, strict=False)

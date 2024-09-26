@@ -170,3 +170,50 @@ def evaluate(probs, y_true, verbose = False, normalize = False, bins = 15, is_sp
         print(ece, mce, oe)
     
     # return (error, ece, mce, loss) # brier)
+    
+def calculate_ece(probs, y_true, verbose = False, normalize = False, bins = 15, is_spline = False):
+    if is_spline:
+        # print(probs[0].shape, probs[1].shape)
+        preds = np.argmax(probs[0], axis=1)
+        confs = probs[1]
+    else:
+        preds = np.argmax(probs, axis=1)  # Take maximum confidence as prediction
+        
+        if normalize:
+            confs = np.max(probs, axis=1)/np.sum(probs, axis=1)
+            # Check if everything below or equal to 1?
+        else:
+            confs = np.max(probs, axis=1)  # Take only maximum confidence
+    
+    # accuracy = accuracy_score(y_true, preds) * 100
+    # error = 100 - accuracy
+    # print(confs.shape, preds)
+    ece = ECE(confs, preds, y_true, bin_size = 1/bins)
+    # Calculate MCE
+    mce = MCE(confs, preds, y_true, bin_size = 1/bins)
+
+    oe = OE(confs, preds, y_true, bin_size = 1/bins)
+    if is_spline:
+        loss = log_loss(y_true=y_true, y_pred=probs[0])
+        y_prob_true = np.array([probs[0][i, idx] for i, idx in enumerate(y_true)])  # Probability of positive class
+
+    else:
+        loss = log_loss(y_true=y_true, y_pred=probs)
+        y_prob_true = np.array([probs[i, idx] for i, idx in enumerate(y_true)])  # Probability of positive class
+
+    
+    # print(y_prob_true.shape)
+    # brier = brier_score_loss(y_true=y_true, y_prob=y_prob_true)  # Brier Score (MSE)
+    
+    if verbose:
+        # print("Accuracy:", accuracy)
+        # print("Error:", error)
+        print("ECE:", ece)
+        print("MCE:", mce)
+        print("OE:", oe)
+        print("Loss:", loss)
+        # print("brier:", brier)
+        print(ece, mce, oe)
+    
+    return ece
+    

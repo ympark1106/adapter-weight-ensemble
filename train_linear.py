@@ -19,7 +19,7 @@ def count_trainable_params(model):
 
 def train():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data', '-d', type=str, default='ham10000')
+    parser.add_argument('--data', '-d', type=str, default='cub')
     parser.add_argument('--gpu', '-g', default = '0', type=str)
     parser.add_argument('--netsize', default='s', type=str)
     parser.add_argument('--save_path', '-s', type=str)
@@ -41,7 +41,7 @@ def train():
 
     lr_decay = [int(0.5*max_epoch), int(0.75*max_epoch), int(0.9*max_epoch)]
 
-    # if args.data == 'ham10000':
+    # if args.data == 'ham10000':z``
     #     train_loader, valid_loader = utils.get_dataset(data_path, batch_size = batch_size)
     # elif args.data == 'aptos':
     #     train_loader, valid_loader = utils.get_aptos_noise_dataset(data_path, noise_rate=noise_rate, batch_size = batch_size)

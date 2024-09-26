@@ -1,7 +1,7 @@
 from .reins import Reins
 from .dino_v2 import DinoVisionTransformer
 from .utils import set_requires_grad, set_train
-
+ 
 
 class ReinsDinoVisionTransformer(DinoVisionTransformer):
     def __init__(
@@ -150,3 +150,5 @@ class ReinsDinoVisionTransformer_3_head(DinoVisionTransformer):
             return super().train(mode)
         set_requires_grad(self, ["reins1", "reins2", "reins3",  "linear"])
         set_train(self, ["reins1", "reins2", "reins3", "linear"])
+        
+        
