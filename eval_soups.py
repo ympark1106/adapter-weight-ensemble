@@ -140,40 +140,40 @@ def train():
     print(f"Model 3 Test Accuracy: {model_dict['test_accuracy3']}")
 
 
-    # #Uniform Soup
-    # for j, model_path in enumerate(model_paths):
+    #Uniform Soup
+    for j, model_path in enumerate(model_paths):
 
-    #     print(f'Adding model {j+1} of {len(models)} to uniform soup.')
-    #     assert os.path.exists(model_path)
-    #     checkpoint = torch.load(model_path)
-    #     state_dict = checkpoint['state_dict']
-    #     # for k, v in state_dict.items():
-    #     #     if isinstance(v, torch.Tensor):
-    #     #         print(f"Averaging layer: {k}")
-    #     if j == 0:
-    #         uniform_soup = {k: v * (1./len(models)) for k, v in state_dict.items() if isinstance(v, torch.Tensor)}
-    #     else:
-    #         uniform_soup = {k: v * (1./len(models)) + uniform_soup[k] for k, v in state_dict.items() if isinstance(v, torch.Tensor)}
+        print(f'Adding model {j+1} of {len(models)} to uniform soup.')
+        assert os.path.exists(model_path)
+        checkpoint = torch.load(model_path)
+        state_dict = checkpoint['state_dict']
+        # for k, v in state_dict.items():
+        #     if isinstance(v, torch.Tensor):
+        #         print(f"Averaging layer: {k}")
+        if j == 0:
+            uniform_soup = {k: v * (1./len(models)) for k, v in state_dict.items() if isinstance(v, torch.Tensor)}
+        else:
+            uniform_soup = {k: v * (1./len(models)) + uniform_soup[k] for k, v in state_dict.items() if isinstance(v, torch.Tensor)}
             
             
-    # model1.load_state_dict(uniform_soup)
-    # model1.eval()
+    model1.load_state_dict(uniform_soup)
+    model1.eval()
     
-    # test_accuracy = validation_accuracy(model1, test_loader, device, mode=args.type)
-    # print('test acc:', test_accuracy)
+    test_accuracy = validation_accuracy(model1, test_loader, device, mode=args.type)
+    print('test acc:', test_accuracy)
 
-    # outputs = []
-    # targets = []
-    # with torch.no_grad():
-    #     for batch_idx, (inputs, target) in enumerate(test_loader):
-    #         inputs, target = inputs.to(device), target.to(device)
-    #         output = rein_forward(model1, inputs)
-    #         outputs.append(output.cpu())
-    #         targets.append(target.cpu())
-    # outputs = torch.cat(outputs).numpy()
-    # targets = torch.cat(targets).numpy()
-    # targets = targets.astype(int)
-    # evaluation.evaluate(outputs, targets, verbose=True)
+    outputs = []
+    targets = []
+    with torch.no_grad():
+        for batch_idx, (inputs, target) in enumerate(test_loader):
+            inputs, target = inputs.to(device), target.to(device)
+            output = rein_forward(model1, inputs)
+            outputs.append(output.cpu())
+            targets.append(target.cpu())
+    outputs = torch.cat(outputs).numpy()
+    targets = torch.cat(targets).numpy()
+    targets = targets.astype(int)
+    evaluation.evaluate(outputs, targets, verbose=True)
             
             
             
