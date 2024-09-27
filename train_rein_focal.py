@@ -66,23 +66,7 @@ def train():
     elif args.data == 'cub':
         train_loader, valid_loader = cub.get_train_val_loader(data_path, batch_size=32, scale_size=256, crop_size=224, num_workers=8, pin_memory=True)
     elif args.data == 'ham10000':
-        # Train DataLoader
-        train_loader, _ = ham10000.create_dataloader(
-            annotations_file=os.path.join(data_path, 'ISIC2018_Task3_Training_GroundTruth.csv'),
-            img_dir=os.path.join(data_path, 'train/'),
-            batch_size=batch_size,
-            shuffle=True,
-            transform_mode='augment'
-        )
-
-        # Validation DataLoader
-        valid_loader, _ = ham10000.create_dataloader(
-            annotations_file=os.path.join(data_path, 'ISIC2018_Task3_Validation_GroundTruth.csv'),
-            img_dir=os.path.join(data_path, 'valid/'),
-            batch_size=batch_size,
-            shuffle=False,  
-            transform_mode='base'  
-        )
+        train_loader, valid_loader, test_loader = ham10000.get_dataloaders(data_path, batch_size=32, num_workers=4)
     
         
     if args.netsize == 's':

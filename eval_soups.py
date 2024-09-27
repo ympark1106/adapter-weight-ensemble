@@ -1,6 +1,9 @@
 import warnings
 warnings.filterwarnings("ignore", message="xFormers is not available")
 
+import matplotlib
+matplotlib.use('Agg') 
+
 import os
 os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
@@ -17,10 +20,12 @@ from utils import read_conf, validation_accuracy
 import random
 import rein
 import operator
+import matplotlib.pyplot as plt
 
 import dino_variant
 import evaluation
 from data import cifar10, cub, ham10000
+from loss_landscape import plot_loss_landscape_with_models
 
 
 def rein_forward(model, inputs):
@@ -49,9 +54,9 @@ def train():
     data_path = config['data_root']
     batch_size = int(config['batch_size'])
     
-    save_path1 = os.path.join(config['save_path'], 'adapter2')
-    save_path2 = os.path.join(config['save_path'], 'adapter22')
-    save_path3 = os.path.join(config['save_path'], 'adapter33')
+    save_path1 = os.path.join(config['save_path'], 'adapter1')
+    save_path2 = os.path.join(config['save_path'], 'adapter11')
+    save_path3 = os.path.join(config['save_path'], 'adapter111')
 
     if args.data == 'cifar10':
         test_loader = cifar10.get_train_valid_loader(
@@ -60,13 +65,7 @@ def train():
         test_loader = cub.get_test_loader(
             data_path, batch_size=32, scale_size=256, crop_size=224, num_workers=4, pin_memory=True)
     elif args.data == 'ham10000':
-        test_loader, _ = ham10000.create_dataloader(
-            annotations_file=os.path.join(data_path, 'ISIC2018_Task3_Test_GroundTruth.csv'),
-            img_dir=os.path.join(data_path, 'test'),
-            batch_size=batch_size,
-            shuffle=True,
-            transform_mode='base'
-        )
+        train_loader, valid_loader, test_loader = ham10000.get_dataloaders(data_path, batch_size=32, num_workers=4)
 
     if args.netsize == 's':
         model_load = dino_variant._small_dino
@@ -105,8 +104,9 @@ def train():
     model2.to(device)
     model3.to(device)
     
-    
-    test_accuracy_list = []
+    criterion = nn.CrossEntropyLoss()
+    plot_loss_landscape_with_models(model1, model2, model3, test_loader, criterion, device, save_path='loss_landscape_with_models.png', num_classes=config['num_classes'])
+
 
     ## validation
     model1.eval()
@@ -122,14 +122,10 @@ def train():
         "test_accuracy2": None,
         "test_accuracy3": None,
         # 'ece1': 0.078,
-        # 'ece2': 0.022 ,
+        # 'ece2': 0.022,
         # 'ece3': 0.083,
     }
 
-    # ## validation
-    model1.eval()
-    model2.eval()
-    model3.eval()
 
     model_dict["test_accuracy1"] = validation_accuracy(model1, test_loader, device, mode=args.type)
     model_dict["test_accuracy2"] = validation_accuracy(model2, test_loader, device, mode=args.type)
@@ -243,7 +239,8 @@ def train():
     targets = torch.cat(targets).numpy()
     targets = targets.astype(int)
     evaluation.evaluate(outputs, targets, verbose=True)
-
+    
+    
 
 if __name__ =='__main__':
     train()

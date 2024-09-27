@@ -124,9 +124,6 @@ def train():
     
     num_params = count_trainable_params(model)
     print(f"Number of trainable parameters: {num_params}")
-    
-    # flops = FlopCountAnalysis(model, torch.randn(1, 3, 224, 224).to(device))
-    # print(f"FLOPs: {flops.total() / 1e9:.2f} GFLOPs")  # Print FLOPs in billions
 
     criterion = RankMixup_MNDCG(num_classes=config['num_classes'], alpha=0.1).to(device)
 
@@ -134,7 +131,6 @@ def train():
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, lr_decay)
     saver = timm.utils.CheckpointSaver(model, optimizer, checkpoint_dir=save_path, max_history=1)
 
-    # print(train_loader.dataset[0][0].shape)
 
     avg_accuracy = 0.0
     for epoch in range(max_epoch):

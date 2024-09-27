@@ -94,14 +94,8 @@ def train():
     elif args.data == 'cub':
         test_loader = cub.get_test_loader(data_path, batch_size=32, scale_size=256, crop_size=224, num_workers=4, pin_memory=True)
     elif args.data == 'ham10000':
-        # Test DataLoader
-        test_loader, _ = ham10000.create_dataloader(
-            annotations_file=os.path.join(data_path, 'ISIC2018_Task3_Test_GroundTruth.csv'),
-            img_dir=os.path.join(data_path, 'test/'),
-            batch_size=batch_size,
-            shuffle=True,
-            transform_mode='base'
-        )
+        train_loader, valid_loader, test_loader = ham10000.get_dataloaders(data_path, batch_size=32, num_workers=4)
+        
 
 
         
@@ -131,9 +125,7 @@ def train():
     # state_dict = torch.load(os.path.join(save_path, 'model_best.pth.tar'), map_location='cpu')['state_dict']
     model.load_state_dict(state_dict, strict=True)
             
-    #print(model)
-    criterion = torch.nn.CrossEntropyLoss()
-    model.eval()
+    print(model)
 
     ## validation
     model.eval()
@@ -144,9 +136,11 @@ def train():
     targets = []
     with torch.no_grad():
         for batch_idx, (inputs, target) in enumerate(test_loader):
+            # print(f"Batch {batch_idx} targets:", target)
             inputs, target = inputs.to(device), target.to(device)
             if args.type == 'rein':
                 output = rein_forward(model, inputs)
+                # print(output.shape)  # 출력 클래스 수 확인
             elif args.type == 'rein3':
                 output = rein3_forward(model, inputs)
             outputs.append(output.cpu())

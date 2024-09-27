@@ -60,14 +60,9 @@ def train():
         test_loader = cub.get_test_loader(
             data_path, batch_size=32, scale_size=256, crop_size=224, num_workers=4, pin_memory=True)
     elif args.data == 'ham10000':
-        test_loader, _ = ham10000.create_dataloader(
-            annotations_file=os.path.join(data_path, 'ISIC2018_Task3_Test_GroundTruth.csv'),
-            img_dir=os.path.join(data_path, 'test'),
-            batch_size=batch_size,
-            shuffle=True,
-            transform_mode='base'
-        )
-
+        train_loader, valid_loader, test_loader = ham10000.get_dataloaders(data_path, batch_size=32, num_workers=4)
+        
+        
     if args.netsize == 's':
         model_load = dino_variant._small_dino
         variant = dino_variant._small_variant
