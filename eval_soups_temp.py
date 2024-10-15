@@ -27,11 +27,10 @@ from data import cifar10, cifar100, cub, ham10000
 from loss_landscape import plot_loss_landscape_with_models
 
 
-
 def rein_forward(model, inputs, temp_scaler=None):
     output = model.forward_features(inputs)[:, 0, :]
     output = model.linear(output)
-    if temp_scaler:
+    if temp_scaler:  # Apply temperature scaling if available
         output = temp_scaler.temperature_scale(output)
     output = torch.softmax(output, dim=1)
     return output
@@ -51,8 +50,8 @@ def train():
     data_path = config['data_root']
     batch_size = int(config['batch_size'])
     
-    save_path1 = os.path.join(config['save_path'], 'adapter3')
-    save_path2 = os.path.join(config['save_path'], 'adapter33')
+    save_path1 = os.path.join(config['save_path'], 'adapter111')
+    save_path2 = os.path.join(config['save_path'], 'adapter22')
     save_path3 = os.path.join(config['save_path'], 'adapter333')
     # save_path4 = os.path.join(config['save_path'], 'adapter2222')
     # save_path5 = os.path.join(config['save_path'], 'adapter22')
@@ -171,9 +170,9 @@ def train():
 
     
     model_dict = {
-        "model1": model1,
-        "model2": model2,
-        "model3": model3,
+        "model1": model_with_temp1,
+        "model2": model_with_temp2,
+        "model3": model_with_temp3,
         # "model4": model4,
         # "model5": model5,
         # "model6": model6,
@@ -188,9 +187,9 @@ def train():
 
 
 
-    model_dict["valid_accuracy1"] = validation_accuracy(model1, valid_loader, device, mode=args.type)
-    model_dict["valid_accuracy2"] = validation_accuracy(model2, valid_loader, device, mode=args.type)
-    model_dict["valid_accuracy3"] = validation_accuracy(model3, valid_loader, device, mode=args.type)
+    model_dict["valid_accuracy1"] = validation_accuracy(model_with_temp1, valid_loader, device, mode=args.type)
+    model_dict["valid_accuracy2"] = validation_accuracy(model_with_temp2, valid_loader, device, mode=args.type)
+    model_dict["valid_accuracy3"] = validation_accuracy(model_with_temp3, valid_loader, device, mode=args.type)
     # model_dict["valid_accuracy4"] = validation_accuracy(model4, valid_loader, device, mode=args.type)
     # model_dict["test_accuracy5"] = validation_accuracy(model5, test_loader, device, mode=args.type)
     # model_dict["test_accuracy6"] = validation_accuracy(model6, test_loader, device, mode=args.type)
@@ -204,25 +203,23 @@ def train():
 
 
     # #Uniform Soup
-    # for j, model_path in enumerate(model_paths):
+    # for j, model_temp in enumerate(models_temp):
 
-    #     print(f'Adding model {j+1} of {len(models)} to uniform soup.')
-    #     assert os.path.exists(model_path)
-    #     checkpoint = torch.load(model_path)
-    #     state_dict = checkpoint['state_dict']
+    #     print(f'Adding model {j+1} of {len(models_temp)} to uniform soup.')
+
     #     # for k, v in state_dict.items():
     #     #     if isinstance(v, torch.Tensor):
     #     #         print(f"Averaging layer: {k}")
     #     if j == 0:
-    #         uniform_soup = {k: v * (1./len(models)) for k, v in state_dict.items() if isinstance(v, torch.Tensor)}
+    #         uniform_soup = {k: v * (1./len(models_temp)) for k, v in state_dict.items() if isinstance(v, torch.Tensor)}
     #     else:
-    #         uniform_soup = {k: v * (1./len(models)) + uniform_soup[k] for k, v in state_dict.items() if isinstance(v, torch.Tensor)}
+    #         uniform_soup = {k: v * (1./len(models_temp)) + uniform_soup[k] for k, v in state_dict.items() if isinstance(v, torch.Tensor)}
             
             
-    # model1.load_state_dict(uniform_soup)
-    # model1.eval()
+    # model_with_temp1.load_state_dict(uniform_soup)
+    # model_with_temp1.eval()
     
-    # test_accuracy = validation_accuracy(model1, test_loader, device, mode=args.type)
+    # test_accuracy = validation_accuracy(model_with_temp1, test_loader, device, mode=args.type)
     # print('test acc:', test_accuracy)
 
     # outputs = []
@@ -266,7 +263,7 @@ def train():
     greedy_soup_ingredients = [sorted_models[0][0]]
 
     for i in range(1, len(models)):
-        print(f'Testing model {i} of {len(models)}')
+        print(f'Testing model {i} of {len(models_temp)}')
 
         new_ingredient_params = sorted_models[i][0].state_dict()
         num_ingredients = len(greedy_soup_ingredients)
@@ -293,12 +290,12 @@ def train():
             # print(f'Adding to soup. New soup is {greedy_soup_ingredients}')
             
     
-    model1.load_state_dict(greedy_soup_params)
-    model1.eval()
+    model_with_temp1.load_state_dict(greedy_soup_params)
+    model_with_temp1.eval()
     
     
     
-    test_accuracy = validation_accuracy(model1, test_loader, device, mode=args.type)
+    test_accuracy = validation_accuracy(model_with_temp1, test_loader, device, mode=args.type)
     print('test acc:', test_accuracy)
 
     outputs = []
@@ -306,7 +303,7 @@ def train():
     with torch.no_grad():
         for batch_idx, (inputs, target) in enumerate(test_loader):
             inputs, target = inputs.to(device), target.to(device)
-            output = rein_forward(model1, inputs)
+            output = rein_forward(model1, inputs, temp_scaler=model_with_temp3)
             outputs.append(output.cpu())
             targets.append(target.cpu())
     outputs = torch.cat(outputs).numpy()

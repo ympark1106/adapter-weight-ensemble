@@ -171,7 +171,8 @@ def evaluate(probs, y_true, verbose = False, normalize = False, bins = 15, is_sp
     
     # return (error, ece, mce, loss) # brier)
     
-def calculate_ece(probs, y_true, verbose = False, normalize = False, bins = 15, is_spline = False):
+def calculate_ece(probs, y_true, normalize = False, bins = 15, is_spline = False):
+
     if is_spline:
         # print(probs[0].shape, probs[1].shape)
         preds = np.argmax(probs[0], axis=1)
@@ -189,31 +190,30 @@ def calculate_ece(probs, y_true, verbose = False, normalize = False, bins = 15, 
     # error = 100 - accuracy
     # print(confs.shape, preds)
     ece = ECE(confs, preds, y_true, bin_size = 1/bins)
-    # Calculate MCE
     mce = MCE(confs, preds, y_true, bin_size = 1/bins)
-
     oe = OE(confs, preds, y_true, bin_size = 1/bins)
-    if is_spline:
-        loss = log_loss(y_true=y_true, y_pred=probs[0])
-        y_prob_true = np.array([probs[0][i, idx] for i, idx in enumerate(y_true)])  # Probability of positive class
-
-    else:
-        loss = log_loss(y_true=y_true, y_pred=probs)
-        y_prob_true = np.array([probs[i, idx] for i, idx in enumerate(y_true)])  # Probability of positive class
-
-    
-    # print(y_prob_true.shape)
-    # brier = brier_score_loss(y_true=y_true, y_prob=y_prob_true)  # Brier Score (MSE)
-    
-    if verbose:
-        # print("Accuracy:", accuracy)
-        # print("Error:", error)
-        print("ECE:", ece)
-        print("MCE:", mce)
-        print("OE:", oe)
-        print("Loss:", loss)
-        # print("brier:", brier)
-        print(ece, mce, oe)
     
     return ece
+
+
+def calculate_nll(outputs, targets):
+    """
+    Calculate the Negative Log-Likelihood (NLL) for the given outputs and targets.
+
+    Args:
+        outputs (numpy.ndarray): The predicted probabilities from the model (e.g., softmax outputs).
+        targets (numpy.ndarray): The true labels.
+
+    Returns:
+        float: The calculated NLL.
+    """
+    # Convert numpy arrays to PyTorch tensors
+    outputs_tensor = torch.tensor(outputs, requires_grad=True)
+    targets_tensor = torch.tensor(targets, dtype=torch.long)
+    
+    # Compute the negative log likelihood
+    nll = F.nll_loss(torch.log(outputs_tensor), targets_tensor)
+    
+    # Return the NLL as a scalar
+    return nll.item()
     

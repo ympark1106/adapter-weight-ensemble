@@ -27,11 +27,10 @@ from data import cifar10, cifar100, cub, ham10000
 from loss_landscape import plot_loss_landscape_with_models
 
 
-
 def rein_forward(model, inputs, temp_scaler=None):
     output = model.forward_features(inputs)[:, 0, :]
     output = model.linear(output)
-    if temp_scaler:
+    if temp_scaler:  # Apply temperature scaling if available
         output = temp_scaler.temperature_scale(output)
     output = torch.softmax(output, dim=1)
     return output
@@ -51,9 +50,9 @@ def train():
     data_path = config['data_root']
     batch_size = int(config['batch_size'])
     
-    save_path1 = os.path.join(config['save_path'], 'adapter3')
-    save_path2 = os.path.join(config['save_path'], 'adapter33')
-    save_path3 = os.path.join(config['save_path'], 'adapter333')
+    save_path1 = os.path.join(config['save_path'], 'adapter1')
+    save_path2 = os.path.join(config['save_path'], 'adapter11')
+    save_path3 = os.path.join(config['save_path'], 'adapter111')
     # save_path4 = os.path.join(config['save_path'], 'adapter2222')
     # save_path5 = os.path.join(config['save_path'], 'adapter22')
     # save_path6 = os.path.join(config['save_path'], 'adapter222')
@@ -151,22 +150,6 @@ def train():
     models.append(model2)
     models.append(model3)
     # models.append(model4)
-
-
-    # Wrap the model with temperature scaling
-    model_with_temp1 = ModelWithTemperature(model1, device=device)
-    model_with_temp2 = ModelWithTemperature(model2, device=device)
-    model_with_temp3 = ModelWithTemperature(model3, device=device)
-
-    model_with_temp1.set_temperature(valid_loader)  # Apply temperature scaling
-    model_with_temp2.set_temperature(valid_loader)  # Apply temperature scaling
-    model_with_temp3.set_temperature(valid_loader)  # Apply temperature scaling 
-    
-    models_temp = []
-    
-    models_temp.append(model_with_temp1)
-    models_temp.append(model_with_temp2)
-    models_temp.append(model_with_temp3)
     
 
     
@@ -294,11 +277,14 @@ def train():
             
     
     model1.load_state_dict(greedy_soup_params)
-    model1.eval()
+    
+    model_with_temp1 = ModelWithTemperature(model1, device=device)
+    model_with_temp1.set_temperature(valid_loader)  # Apply temperature scaling
     
     
     
-    test_accuracy = validation_accuracy(model1, test_loader, device, mode=args.type)
+    
+    test_accuracy = validation_accuracy(model_with_temp1, test_loader, device, mode=args.type)
     print('test acc:', test_accuracy)
 
     outputs = []
@@ -306,7 +292,7 @@ def train():
     with torch.no_grad():
         for batch_idx, (inputs, target) in enumerate(test_loader):
             inputs, target = inputs.to(device), target.to(device)
-            output = rein_forward(model1, inputs)
+            output = rein_forward(model1, inputs, temp_scaler=model_with_temp1)
             outputs.append(output.cpu())
             targets.append(target.cpu())
     outputs = torch.cat(outputs).numpy()

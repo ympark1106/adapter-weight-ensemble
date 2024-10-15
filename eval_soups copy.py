@@ -15,7 +15,8 @@ import torch.nn as nn
 import argparse
 import timm
 import numpy as np
-from utils import read_conf, validation_accuracy, ModelWithTemperature
+from utils import read_conf, validation_accuracy
+
 import random
 import rein
 import operator
@@ -23,18 +24,17 @@ import matplotlib.pyplot as plt
 
 import dino_variant
 import evaluation
-from data import cifar10, cifar100, cub, ham10000
+from data import cifar10, cub, ham10000
 from loss_landscape import plot_loss_landscape_with_models
 
 
-
-def rein_forward(model, inputs, temp_scaler=None):
+def rein_forward(model, inputs):
     output = model.forward_features(inputs)[:, 0, :]
     output = model.linear(output)
-    if temp_scaler:
-        output = temp_scaler.temperature_scale(output)
     output = torch.softmax(output, dim=1)
+
     return output
+
 
 def train():
     parser = argparse.ArgumentParser()
@@ -44,6 +44,9 @@ def train():
     parser.add_argument('--type', '-t', default= 'rein', type=str)
     args = parser.parse_args()
 
+    save_path1 = 'adapter1'
+    save_path2 = 'adapter2'
+    save_path3 = 'adapter3'
 
     config = read_conf(os.path.join('conf', 'data', f'{args.data}.yaml'))
 
@@ -51,39 +54,36 @@ def train():
     data_path = config['data_root']
     batch_size = int(config['batch_size'])
     
-    save_path1 = os.path.join(config['save_path'], 'adapter3')
-    save_path2 = os.path.join(config['save_path'], 'adapter33')
-    save_path3 = os.path.join(config['save_path'], 'adapter333')
-    # save_path4 = os.path.join(config['save_path'], 'adapter2222')
+    save_path1 = os.path.join(config['save_path'], 'adapter1')
+    save_path2 = os.path.join(config['save_path'], 'adapter11')
+    save_path3 = os.path.join(config['save_path'], 'adapter111')
+    # save_path4 = os.path.join(config['save_path'], 'adapter2')
     # save_path5 = os.path.join(config['save_path'], 'adapter22')
     # save_path6 = os.path.join(config['save_path'], 'adapter222')
 
     if args.data == 'cifar10':
         test_loader = cifar10.get_train_valid_loader(
             batch_size, augment=True, random_seed=42, valid_size=0.1, shuffle=True, num_workers=4, pin_memory=True, get_val_temp=0, data_dir=data_path)
-    elif args.data == 'cifar100':
-        _, valid_loader = cifar100.get_train_valid_loader(
-            data_dir=data_path, augment=True, batch_size=32, valid_size=0.1, random_seed=42, shuffle=True, num_workers=4, pin_memory=True)
-        test_loader = cifar100.get_test_loader(
-            data_dir=data_path, batch_size=32, shuffle=True, num_workers=4, pin_memory=True)
     elif args.data == 'cub':
-        _, valid_loader = cub.get_train_val_loader(data_path, batch_size=32, scale_size=256, crop_size=224, num_workers=4, pin_memory=True)
         test_loader = cub.get_test_loader(
             data_path, batch_size=32, scale_size=256, crop_size=224, num_workers=4, pin_memory=True)
     elif args.data == 'ham10000':
-        _, valid_loader, test_loader = ham10000.get_dataloaders(data_path, batch_size=32, num_workers=4)
+        train_loader, valid_loader, test_loader = ham10000.get_dataloaders(data_path, batch_size=32, num_workers=4)
 
     if args.netsize == 's':
         model_load = dino_variant._small_dino
         variant = dino_variant._small_variant
 
-    
     model1 = torch.hub.load('facebookresearch/dinov2', model_load)
     model2 = torch.hub.load('facebookresearch/dinov2', model_load)
     model3 = torch.hub.load('facebookresearch/dinov2', model_load)
     # model4 = torch.hub.load('facebookresearch/dinov2', model_load)
     # model5 = torch.hub.load('facebookresearch/dinov2', model_load)
     # model6 = torch.hub.load('facebookresearch/dinov2', model_load)
+    
+    models = [model1, model2, model3, 
+            #   model4, model5, model6
+              ]
     
     model1 = rein.ReinsDinoVisionTransformer(**variant)
     model2 = rein.ReinsDinoVisionTransformer(**variant)
@@ -113,10 +113,8 @@ def train():
     # model_path5 = os.path.join(save_path5, 'last.pth.tar')
     # model_path6 = os.path.join(save_path6, 'last.pth.tar')
     
-    model_paths = [model_path1, model_path2, model_path3,
-                # model_path4, 
-                # model_path5, 
-                # model_path6
+    model_paths = [model_path1, model_path2, model_path3, 
+                #    model_path4, model_path5, model_path6
                    ]
         
     model1.load_state_dict(state_dict1, strict=False)
@@ -145,31 +143,8 @@ def train():
     # model4.eval()
     # model5.eval()
     # model6.eval()
-    
-    models = []
-    models.append(model1)
-    models.append(model2)
-    models.append(model3)
-    # models.append(model4)
 
 
-    # Wrap the model with temperature scaling
-    model_with_temp1 = ModelWithTemperature(model1, device=device)
-    model_with_temp2 = ModelWithTemperature(model2, device=device)
-    model_with_temp3 = ModelWithTemperature(model3, device=device)
-
-    model_with_temp1.set_temperature(valid_loader)  # Apply temperature scaling
-    model_with_temp2.set_temperature(valid_loader)  # Apply temperature scaling
-    model_with_temp3.set_temperature(valid_loader)  # Apply temperature scaling 
-    
-    models_temp = []
-    
-    models_temp.append(model_with_temp1)
-    models_temp.append(model_with_temp2)
-    models_temp.append(model_with_temp3)
-    
-
-    
     model_dict = {
         "model1": model1,
         "model2": model2,
@@ -177,10 +152,10 @@ def train():
         # "model4": model4,
         # "model5": model5,
         # "model6": model6,
-        "valid_accuracy1": None,
-        "valid_accuracy2": None,
-        "valid_accuracy3": None,
-        "valid_accuracy4": None,
+        "test_accuracy1": None,
+        "test_accuracy2": None,
+        "test_accuracy3": None,
+        # "test_accuracy4": None,
         # "test_accuracy5": None,
         # "test_accuracy6": None
     }
@@ -188,17 +163,17 @@ def train():
 
 
 
-    model_dict["valid_accuracy1"] = validation_accuracy(model1, valid_loader, device, mode=args.type)
-    model_dict["valid_accuracy2"] = validation_accuracy(model2, valid_loader, device, mode=args.type)
-    model_dict["valid_accuracy3"] = validation_accuracy(model3, valid_loader, device, mode=args.type)
-    # model_dict["valid_accuracy4"] = validation_accuracy(model4, valid_loader, device, mode=args.type)
+    model_dict["test_accuracy1"] = validation_accuracy(model1, test_loader, device, mode=args.type)
+    model_dict["test_accuracy2"] = validation_accuracy(model2, test_loader, device, mode=args.type)
+    model_dict["test_accuracy3"] = validation_accuracy(model3, test_loader, device, mode=args.type)
+    # model_dict["test_accuracy4"] = validation_accuracy(model4, test_loader, device, mode=args.type)
     # model_dict["test_accuracy5"] = validation_accuracy(model5, test_loader, device, mode=args.type)
     # model_dict["test_accuracy6"] = validation_accuracy(model6, test_loader, device, mode=args.type)
     
-    print(f"Model 1 Valid Accuracy: {model_dict['valid_accuracy1']}")
-    print(f"Model 2 Valid Accuracy: {model_dict['valid_accuracy2']}")
-    print(f"Model 3 Valid Accuracy: {model_dict['valid_accuracy3']}")
-    # print(f"Model 4 Valid Accuracy: {model_dict['valid_accuracy4']}")
+    print(f"Model 1 Test Accuracy: {model_dict['test_accuracy1']}")
+    print(f"Model 2 Test Accuracy: {model_dict['test_accuracy2']}")
+    print(f"Model 3 Test Accuracy: {model_dict['test_accuracy3']}")
+    # print(f"Model 4 Test Accuracy: {model_dict['test_accuracy4']}")
     # print(f"Model 5 Test Accuracy: {model_dict['test_accuracy5']}")
     # print(f"Model 6 Test Accuracy: {model_dict['test_accuracy6']}")
 
@@ -242,25 +217,22 @@ def train():
             
     # Greedy Soup     
     sorted_models = sorted(
-        [(model_dict["model1"], model_dict["valid_accuracy1"]),
-        (model_dict["model2"], model_dict["valid_accuracy2"]),
-        (model_dict["model3"], model_dict["valid_accuracy3"]),
-        # (model_dict["model4"], model_dict["valid_accuracy4"]),
+        [(model_dict["model1"], model_dict["test_accuracy1"]),
+        (model_dict["model2"], model_dict["test_accuracy2"]),
+        (model_dict["model3"], model_dict["test_accuracy3"]),
+        # (model_dict["model4"], model_dict["test_accuracy4"]),
         # (model_dict["model5"], model_dict["test_accuracy5"]),
         # (model_dict["model6"], model_dict["test_accuracy6"])
         ],
         key=lambda x: x[1],  
         reverse=True  
     )
-
-
-    for idx, (model, accuracy) in enumerate(sorted_models, 1):
-        print(f"Model {idx} has valid accuracy {accuracy:.4f}")
-        
     
     max_accuracy = sorted_models[0][1]
-        
-    model = sorted_models[0][0]
+
+    for idx, (model, accuracy) in enumerate(sorted_models, 1):
+        print(f"Model {idx} has accuracy {accuracy:.4f}")
+    
 
     greedy_soup_params = sorted_models[0][0].state_dict() 
     greedy_soup_ingredients = [sorted_models[0][0]]
@@ -278,14 +250,14 @@ def train():
             for k in new_ingredient_params
         }
     
-        model.load_state_dict(potential_greedy_soup_params)
-        model.eval()
+        sorted_models[0][0].load_state_dict(potential_greedy_soup_params)
+        sorted_models[0][0].eval()
         
-        held_out_val_accuracy = validation_accuracy(model, valid_loader, device, mode=args.type)
+        held_out_val_accuracy = validation_accuracy(sorted_models[0][0], test_loader, device, mode=args.type)
         
     
         # If accuracy on the held-out val set increases, add the new model to the greedy soup.
-        print(f'Potential greedy soup test acc {held_out_val_accuracy}, best so far {max_accuracy}.')
+        print(f'Potential greedy soup val acc {held_out_val_accuracy}, best so far {max_accuracy}.')
         if held_out_val_accuracy > max_accuracy:
             greedy_soup_ingredients.append(sorted_models[i])
             max_accuracy = held_out_val_accuracy

@@ -99,7 +99,7 @@ def train():
     
     # criterion = torch.nn.CrossEntropyLoss()
     # criterion = focal_loss.FocalLoss(gamma=3) #gamma 커지면 easy sample에 대한 loss 감소
-    criterion = focal_loss_adaptive_gamma.FocalLossAdaptive()
+    criterion = focal_loss_adaptive_gamma.FocalLossAdaptive(gamma=3)
     model.eval()
 
     

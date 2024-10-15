@@ -12,7 +12,7 @@ import torch.nn as nn
 import argparse
 import timm
 import numpy as np
-from utils import read_conf, validation_accuracy
+from utils import read_conf, validation_accuracy, ModelWithTemperature
 
 import random
 import rein
@@ -22,11 +22,12 @@ import evaluation
 from data import cifar10, cifar100, cub, ham10000
 
 
-def rein_forward(model, inputs):
+def rein_forward(model, inputs, temp_scaler=None):
     output = model.forward_features(inputs)[:, 0, :]
     output = model.linear(output)
+    if temp_scaler:
+        output = temp_scaler.temperature_scale(output)  # Apply temperature scaling
     output = torch.softmax(output, dim=1)
-
     return output
 
 
@@ -49,19 +50,6 @@ def rein3_forward(model, inputs):
 
     return (outputs1 + outputs2 + outputs3)/3
 
-
-def ensemble_forward(models, inputs):
-    ensemble_output = 0
-    
-    for model in models:
-        output = model.forward_features(inputs)[:, 0, :]
-        output = model.linear(output)
-        output = torch.softmax(output, dim=1)
-        ensemble_output += output
-    
-    # Average the outputs
-    ensemble_output /= len(models)
-    return ensemble_output
 
 
 def train():
@@ -91,8 +79,10 @@ def train():
         test_loader = cifar10.get_test_loader(batch_size, shuffle=True, num_workers=4, pin_memory=True, get_val_temp=0, data_dir=data_path)
     elif args.data == 'cifar100':
         test_loader = cifar100.get_test_loader(data_dir=data_path, batch_size=32, shuffle=True, num_workers=4, pin_memory=True)
+        _, valid_loader = cifar100.get_train_valid_loader(data_dir=data_path, augment=True, batch_size=32, valid_size=0.1, random_seed=42, shuffle=True, num_workers=4, pin_memory=True)
     elif args.data == 'cub':
         test_loader = cub.get_test_loader(data_path, batch_size=32, scale_size=256, crop_size=224, num_workers=4, pin_memory=True)
+        _,valid_loader = cub.get_train_val_loader(data_path, batch_size=32, scale_size=256, crop_size=224, num_workers=4, pin_memory=True)
     elif args.data == 'ham10000':
         train_loader, valid_loader, test_loader = ham10000.get_dataloaders(data_path, batch_size=32, num_workers=4)
         
@@ -124,11 +114,15 @@ def train():
     state_dict = torch.load(os.path.join(save_path, 'last.pth.tar'), map_location='cpu')['state_dict']
     # state_dict = torch.load(os.path.join(save_path, 'model_best.pth.tar'), map_location='cpu')['state_dict']
     model.load_state_dict(state_dict, strict=True)
+    
+        # Wrap the model with temperature scaling
+    model_with_temp = ModelWithTemperature(model, device=device)
+    model_with_temp.set_temperature(valid_loader)  # Apply temperature scaling
             
     # print(model)
 
     ## validation
-    model.eval()
+    model_with_temp.eval()
     test_accuracy = validation_accuracy(model, test_loader, device, mode=args.type)
     print('test acc:', test_accuracy)
 
@@ -139,10 +133,10 @@ def train():
             # print(f"Batch {batch_idx} targets:", target)
             inputs, target = inputs.to(device), target.to(device)
             if args.type == 'rein':
-                output = rein_forward(model, inputs)
+                output = rein_forward(model, inputs, temp_scaler=model_with_temp)
                 # print(output.shape)  # 출력 클래스 수 확인
             elif args.type == 'rein3':
-                output = rein3_forward(model, inputs)
+                output = rein3_forward(model, inputs, temp_scaler=model_with_temp)
             outputs.append(output.cpu())
             targets.append(target.cpu())
     outputs = torch.cat(outputs).numpy()
