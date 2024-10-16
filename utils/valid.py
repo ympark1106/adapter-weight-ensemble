@@ -2,7 +2,7 @@
 
 import torch
 import numpy as np
-import evaluation
+from utils import calculate_ece
 
 def rein_forward(model, inputs):
     # Forward pass for the model
@@ -11,7 +11,7 @@ def rein_forward(model, inputs):
     output = torch.softmax(output, dim=1)
     return output
 
-def validate(model, valid_loader, device, evaluation):
+def validate(model, valid_loader, device):
     """
     Perform inference on the test_loader using the given model and evaluate results.
 
@@ -48,7 +48,7 @@ def validate(model, valid_loader, device, evaluation):
     targets = targets.astype(int)
     
     # Call the evaluation function
-    ece = evaluation.calculate_ece(outputs, targets)
+    ece = calculate_ece(outputs, targets)
     
     
     return ece

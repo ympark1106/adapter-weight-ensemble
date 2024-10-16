@@ -12,13 +12,12 @@ import torch.nn as nn
 import argparse
 import timm
 import numpy as np
-from utils import read_conf, validation_accuracy
+from utils import read_conf, validation_accuracy, evaluate
 
 import random
 import rein
 
 import dino_variant
-import evaluation
 from data import cifar10, cifar100, cub, ham10000
 
 
@@ -148,7 +147,7 @@ def train():
     outputs = torch.cat(outputs).numpy()
     targets = torch.cat(targets).numpy()
     targets = targets.astype(int)
-    evaluation.evaluate(outputs, targets, verbose=True)
+    evaluate(outputs, targets, verbose=True)
 
 
 

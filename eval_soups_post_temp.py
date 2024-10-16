@@ -15,14 +15,13 @@ import torch.nn as nn
 import argparse
 import timm
 import numpy as np
-from utils import read_conf, validation_accuracy, ModelWithTemperature
+from utils import read_conf, validation_accuracy, ModelWithTemperature, evaluate
 import random
 import rein
 import operator
 import matplotlib.pyplot as plt
 
 import dino_variant
-import evaluation
 from data import cifar10, cifar100, cub, ham10000
 from loss_landscape import plot_loss_landscape_with_models
 

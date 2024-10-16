@@ -7,10 +7,9 @@ import torch.nn as nn
 import argparse
 import numpy as np
 
-from utils import read_conf, validation_accuracy, ModelWithTemperature
-from valid import validate
+from utils import read_conf, validation_accuracy, ModelWithTemperature, validate, evaluate, calculate_ece, calculate_nll
+
 import dino_variant
-import evaluation
 from data import cifar10, cifar100, cub, ham10000
 import rein
 
@@ -64,7 +63,7 @@ def calculate_ensemble_params(models, weights):
 
 def optimize_weights(models, valid_loader, device, num_iterations, alpha, learning_rate):
     # Initial ECE-based weights
-    ece_list = [validate(model, valid_loader, device, evaluation) for model in models]
+    ece_list = [validate(model, valid_loader, device) for model in models]
     weights = [1 / ece for ece in ece_list]
     total_weight = sum(weights)
     weights = [w / total_weight for w in weights]
@@ -91,8 +90,8 @@ def optimize_weights(models, valid_loader, device, num_iterations, alpha, learni
         targets = torch.cat(targets).numpy().astype(int)
 
         # Calculate ECE and NLL as tensors
-        ensemble_ece = torch.tensor(evaluation.calculate_ece(outputs, targets), requires_grad=True, device=device)
-        ensemble_nll = torch.tensor(evaluation.calculate_nll(outputs, targets), requires_grad=True, device=device)
+        ensemble_ece = torch.tensor(calculate_ece(outputs, targets), requires_grad=True, device=device)
+        ensemble_nll = torch.tensor(calculate_nll(outputs, targets), requires_grad=True, device=device)
 
         # Meta loss as a tensor
         meta_loss = ensemble_ece + alpha * ensemble_nll
@@ -179,7 +178,7 @@ def train():
 
     outputs = torch.cat(outputs).numpy()
     targets = torch.cat(targets).numpy().astype(int)
-    evaluation.evaluate(outputs, targets, verbose=True)
+    evaluate(outputs, targets, verbose=True)
 
 
 if __name__ == '__main__':
