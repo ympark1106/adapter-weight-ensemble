@@ -65,35 +65,55 @@ def sort_models_by_accuracy(models, valid_loader, device, mode):
 
 # Greedy soup ensemble function
 def greedy_soup_ensemble(models, valid_loader, device):
+    # Evaluate and sort models by validation accuracy
     model_accuracies = [(model, validation_accuracy(model, valid_loader, device)) for model in models]
-    sorted_models = sorted(model_accuracies, key=lambda x: x[1], reverse=True)  # Sort by accuracy (descending)
-
-    max_accuracy = sorted_models[0][1]  # 첫 번째 모델의 정확도를 가져옴
-    greedy_soup_params = sorted_models[0][0].state_dict()  # 첫 번째 모델의 state_dict를 가져옴
-    greedy_soup_ingredients = [sorted_models[0][0]]  # 첫 번째 모델을 재료로 추가
+    sorted_models = sorted(model_accuracies, key=lambda x: x[1], reverse=True)
+    
+    for model, accuracy in sorted_models:
+        print(f'Validation accuracy: {accuracy}')
+    
+    # Initialize greedy soup with the highest-performing model
+    max_accuracy = sorted_models[0][1]
+    greedy_soup_params = sorted_models[0][0].state_dict()  # Best model's initial parameters
+    best_params = {k: v.clone() for k, v in greedy_soup_params.items()}  # Keep a copy of best parameters
+    greedy_soup_ingredients = [sorted_models[0][0]] 
 
     for i in range(1, len(sorted_models)):
         print(f'Testing model {i} of {len(sorted_models)}')
+        
+        # New model parameters to test as an additional ingredient
         new_ingredient_params = sorted_models[i][0].state_dict()
         num_ingredients = len(greedy_soup_ingredients)
-
+        
+        # Create potential new soup parameters by averaging with the new ingredient
         potential_greedy_soup_params = {
             k: greedy_soup_params[k].clone() * (num_ingredients / (num_ingredients + 1)) +
                new_ingredient_params[k].clone() * (1. / (num_ingredients + 1))
             for k in new_ingredient_params
         }
-
-        # 모델 로드 후 정확도 검증
+        
+        # Load the new potential parameters into the base model for evaluation
         sorted_models[0][0].load_state_dict(potential_greedy_soup_params)
         sorted_models[0][0].eval()
+        
+        # Calculate validation accuracy with the potential new soup parameters
         held_out_val_accuracy = validation_accuracy(sorted_models[0][0], valid_loader, device)
-
+        print(f'Held-out validation accuracy: {held_out_val_accuracy}')
+        
+        # Update greedy soup if accuracy improves, otherwise revert to original parameters
         if held_out_val_accuracy > max_accuracy:
             greedy_soup_ingredients.append(sorted_models[i][0])
             max_accuracy = held_out_val_accuracy
-            greedy_soup_params = potential_greedy_soup_params
+            greedy_soup_params = potential_greedy_soup_params  # Save the improved parameters
+            best_params = {k: v.clone() for k, v in potential_greedy_soup_params.items()}  # Update best params
+            print(f'New greedy soup ingredient added. Number of ingredients: {len(greedy_soup_ingredients)}\n')
+        else:
+            # Revert to the best-known parameters if the new ingredient didn’t improve accuracy
+            sorted_models[0][0].load_state_dict(best_params)  # Revert to best params
+            print(f'No improvement. Reverting to best-known parameters.\n')
 
-    return greedy_soup_params, sorted_models[0][0]
+    return best_params, sorted_models[0][0]
+
 
 
 # Final evaluation
