@@ -9,7 +9,7 @@ import numpy as np
 
 from utils import read_conf, validation_accuracy, ModelWithTemperature, validate, evaluate, calculate_ece, calculate_nll
 import dino_variant
-from data import cifar10, cifar100, cub, ham10000
+from data import cifar10, cifar100, cub, ham10000, bloodmnist
 import rein
 
 # Model forward function
@@ -45,6 +45,8 @@ def setup_data_loaders(args, data_path, batch_size):
         _, valid_loader = cub.get_train_val_loader(data_path, batch_size=32, scale_size=256, crop_size=224, num_workers=4, pin_memory=True)
     elif args.data == 'ham10000':
         _, valid_loader, test_loader = ham10000.get_dataloaders(data_path, batch_size=32, num_workers=4)
+    elif args.data == 'bloodmnist':
+        _, valid_loader, test_loader = bloodmnist.get_dataloader(data_path, batch_size=32, num_workers=4)
     else:
         raise ValueError(f"Unsupported data type: {args.data}")
     
@@ -55,11 +57,10 @@ def greedy_soup_ensemble(models, valid_loader, device):
     # Calculate ECE for each model and sort them by ECE in ascending order (lower ECE is better)
     ece_list = [validate(model, valid_loader, device) for model in models]
     sorted_models = sorted([(model, ece) for model, ece in zip(models, ece_list)], key=lambda x: x[1])
-    print(f'Sorted models ECE: {sorted_models[0][1]}, {sorted_models[1][1]}, {sorted_models[2][1]}, {sorted_models[3][1]}')
+    print(f'Sorted models ECE: {sorted_models[0][1]}, {sorted_models[1][1]}, {sorted_models[2][1]}, {sorted_models[3][1]}\n')
 
     best_ece = sorted_models[0][1]
     greedy_soup_params = sorted_models[0][0].state_dict()
-    best_params = {k: v.clone() for k, v in greedy_soup_params.items()}  # Keep a copy of the best parameters
     greedy_soup_ingredients = [sorted_models[0][0]]
     
     TOLERANCE = 0.01  # Acceptable tolerance for ECE
@@ -101,17 +102,17 @@ def greedy_soup_ensemble(models, valid_loader, device):
         if held_out_val_ece < best_ece + TOLERANCE:
             if held_out_val_ece < best_ece:
                 best_ece = held_out_val_ece
-                best_params = {k: v.clone() for k, v in potential_greedy_soup_params.items()}  # Update best params
             greedy_soup_ingredients.append(sorted_models[i][0])
             greedy_soup_params = potential_greedy_soup_params
-            print(f'Added new ingredient to soup. Total ingredients: {len(greedy_soup_ingredients)}')
+            print(f'<Added new ingredient to soup. Total ingredients: {len(greedy_soup_ingredients)}>\n')
         else:
             # Revert to the best-known parameters if the new ingredient didn’t improve ECE
             greedy_soup_params = previous_greedy_soup_params
-            sorted_models[0][0].load_state_dict(best_params)  # Load the actual best parameters
-            print(f'No improvement. Reverting to best-known parameters.')
+            sorted_models[0][0].load_state_dict(greedy_soup_params)  # Load the actual best parameters
+            print(f'<No improvement. Reverting to best-known parameters.>\n')
+        
 
-    return best_params, sorted_models[0][0]
+    return greedy_soup_params, sorted_models[0][0]
 
 def train():
     parser = argparse.ArgumentParser()
@@ -127,16 +128,18 @@ def train():
     batch_size = int(config['batch_size'])
     
     save_paths = [
-        os.path.join(config['save_path'], 'reins_ce1'),
-        os.path.join(config['save_path'], 'reins_ce2'),
-        os.path.join(config['save_path'], 'reins_ce3'),
-        os.path.join(config['save_path'], 'reins_ce4'),
+        # os.path.join(config['save_path'], 'reins_ce1'),
+        # os.path.join(config['save_path'], 'reins_ce2'),
+        # os.path.join(config['save_path'], 'reins_ce3'),
+        # os.path.join(config['save_path'], 'reins_ce4'),
         
         # os.path.join(config['save_path'], 'reins_focal1'),
-        # os.path.join(config['save_path'], 'reins_focal2'),
-        # os.path.join(config['save_path'], 'reins_focal3'),
-        # os.path.join(config['save_path'], 'reins_focal4'),
-        # os.path.join(config['save_path'], 'reins_focal5'),
+        os.path.join(config['save_path'], 'reins_focal2'),
+        os.path.join(config['save_path'], 'reins_focal3'),
+        os.path.join(config['save_path'], 'reins_focal4'),
+        os.path.join(config['save_path'], 'reins_focal5'),
+        os.path.join(config['save_path'], 'reins_focal_lr_1'),
+        os.path.join(config['save_path'], 'reins_focal_lr_2'),
         
         # os.path.join(config['save_path'], 'reins_adafocal1'),
         # os.path.join(config['save_path'], 'reins_adafocal2'),
