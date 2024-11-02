@@ -63,11 +63,12 @@ def greedy_soup_ensemble(models, valid_loader, device):
     greedy_soup_params = sorted_models[0][0].state_dict()
     greedy_soup_ingredients = [sorted_models[0][0]]
     
-    TOLERANCE = 0.01  # Acceptable tolerance for ECE
+    TOLERANCE = 0.025  # Acceptable tolerance for ECE
 
     for i in range(1, len(models)):
         new_ingredient_params = sorted_models[i][0].state_dict()
         num_ingredients = len(greedy_soup_ingredients)
+        print(f'Adding ingredient {i+1} to the greedy soup.')
         print(f'Num ingredients: {num_ingredients}')
         
         # Backup current greedy_soup_params before adding new ingredient
@@ -133,13 +134,16 @@ def train():
         # os.path.join(config['save_path'], 'reins_ce3'),
         # os.path.join(config['save_path'], 'reins_ce4'),
         
-        # os.path.join(config['save_path'], 'reins_focal1'),
+        os.path.join(config['save_path'], 'reins_focal1'),
         os.path.join(config['save_path'], 'reins_focal2'),
         os.path.join(config['save_path'], 'reins_focal3'),
         os.path.join(config['save_path'], 'reins_focal4'),
         os.path.join(config['save_path'], 'reins_focal5'),
         os.path.join(config['save_path'], 'reins_focal_lr_1'),
         os.path.join(config['save_path'], 'reins_focal_lr_2'),
+        # os.path.join(config['save_path'], 'reins_focal_lr_3'),
+        # os.path.join(config['save_path'], 'reins_focal_lr_4'),
+        # os.path.join(config['save_path'], 'reins_focal_lr_5'),
         
         # os.path.join(config['save_path'], 'reins_adafocal1'),
         # os.path.join(config['save_path'], 'reins_adafocal2'),
