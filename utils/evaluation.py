@@ -80,7 +80,9 @@ def OE(conf, pred, true, bin_size = 0.1):
     
     for conf_thresh in upper_bounds:  # Go through bounds and find accuracies and confidences
         acc, avg_conf, len_bin = compute_acc_bin(conf_thresh-bin_size, conf_thresh, conf, pred, true)  
-        ece += avg_conf * np.max(avg_conf-acc, 0)*len_bin/n  # Add weigthed difference to ECE
+        # print(acc, avg_conf, len_bin)
+        if avg_conf > acc:
+            ece += avg_conf * (avg_conf - acc) * len_bin / n 
         
     return ece
 
