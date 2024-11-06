@@ -9,7 +9,7 @@ import numpy as np
 
 from utils import read_conf, validation_accuracy, ModelWithTemperature, validate, evaluate, calculate_ece, calculate_nll
 import dino_variant
-from data import cifar10, cifar100, cub, ham10000
+from data import cifar10, cifar100, cub, ham10000, bloodmnist
 import rein
 
 # Model forward function
@@ -34,6 +34,8 @@ def setup_data_loaders(args, data_path, batch_size):
         _, valid_loader = cub.get_train_val_loader(data_path, batch_size=32, scale_size=256, crop_size=224, num_workers=4, pin_memory=True)
     elif args.data == 'ham10000':
         _, valid_loader, test_loader = ham10000.get_dataloaders(data_path, batch_size=32, num_workers=4)
+    elif args.data == 'bloodmnist':
+        _, test_loader, valid_loader = bloodmnist.get_dataloader(batch_size, shuffle=True, download=True, num_workers=4)
     else:
         raise ValueError(f"Unsupported data type: {args.data}")
     
@@ -64,22 +66,26 @@ def sort_models_by_accuracy(models, valid_loader, device, mode):
     return sorted_models
 
 # Greedy soup ensemble function
-def greedy_soup_ensemble(models, valid_loader, device):
+def greedy_soup_ensemble(models, model_names, valid_loader, device):
     # Evaluate and sort models by validation accuracy
-    model_accuracies = [(model, validation_accuracy(model, valid_loader, device)) for model in models]
+    model_accuracies = [(model, validation_accuracy(model, valid_loader, device), name) for model, name in zip(models, model_names)]
+    
+    # Sort models based on accuracy
     sorted_models = sorted(model_accuracies, key=lambda x: x[1], reverse=True)
     
-    for model, accuracy in sorted_models:
-        print(f'Validation accuracy: {accuracy}')
+    # Print sorted models with their names and accuracies
+    print("Sorted models by accuracy:")
+    for model, acc, name in sorted_models:
+        print(f'Model: {name}, Accuracy: {acc}')
+    print("\n")
     
     # Initialize greedy soup with the highest-performing model
     max_accuracy = sorted_models[0][1]
     greedy_soup_params = sorted_models[0][0].state_dict()  # Best model's initial parameters
-    best_params = {k: v.clone() for k, v in greedy_soup_params.items()}  # Keep a copy of best parameters
     greedy_soup_ingredients = [sorted_models[0][0]] 
 
     for i in range(1, len(sorted_models)):
-        print(f'Testing model {i} of {len(sorted_models)}')
+        print(f'Testing model {i+1} ({sorted_models[i][2]}) of {len(sorted_models)}')
         
         # New model parameters to test as an additional ingredient
         new_ingredient_params = sorted_models[i][0].state_dict()
@@ -105,14 +111,14 @@ def greedy_soup_ensemble(models, valid_loader, device):
             greedy_soup_ingredients.append(sorted_models[i][0])
             max_accuracy = held_out_val_accuracy
             greedy_soup_params = potential_greedy_soup_params  # Save the improved parameters
-            best_params = {k: v.clone() for k, v in potential_greedy_soup_params.items()}  # Update best params
-            print(f'New greedy soup ingredient added. Number of ingredients: {len(greedy_soup_ingredients)}\n')
+            print(f'[New greedy soup ingredient added. Number of ingredients: {len(greedy_soup_ingredients)}]\n')
         else:
             # Revert to the best-known parameters if the new ingredient didn’t improve accuracy
-            sorted_models[0][0].load_state_dict(best_params)  # Revert to best params
-            print(f'No improvement. Reverting to best-known parameters.\n')
+            sorted_models[0][0].load_state_dict(greedy_soup_params)  # Revert to best params
+            print(f'[No improvement. Reverting to best-known parameters.]\n')
 
-    return best_params, sorted_models[0][0]
+    return greedy_soup_params, sorted_models[0][0]
+
 
 
 
@@ -145,29 +151,36 @@ def train():
     batch_size = int(config['batch_size'])
     
     save_paths = [
-        os.path.join(config['save_path'], 'reins_ce1'),
-        os.path.join(config['save_path'], 'reins_ce2'),
-        os.path.join(config['save_path'], 'reins_ce3'),
-        os.path.join(config['save_path'], 'reins_ce4'),
+        # os.path.join(config['save_path'], 'reins_ce1'),
+        # os.path.join(config['save_path'], 'reins_ce2'),
+        # os.path.join(config['save_path'], 'reins_ce3'),
+        # os.path.join(config['save_path'], 'reins_ce4'),
         
-        # os.path.join(config['save_path'], 'reins_focal1'),
-        # os.path.join(config['save_path'], 'reins_focal2'),
-        # os.path.join(config['save_path'], 'reins_focal3'),
-        # os.path.join(config['save_path'], 'reins_focal4'),
-        # os.path.join(config['save_path'], 'reins_focal5'),
+        os.path.join(config['save_path'], 'reins_focal1'),
+        os.path.join(config['save_path'], 'reins_focal2'),
+        os.path.join(config['save_path'], 'reins_focal3'),
+        os.path.join(config['save_path'], 'reins_focal4'),
+        os.path.join(config['save_path'], 'reins_focal5'),
+        os.path.join(config['save_path'], 'reins_focal_lr_1'),
+        os.path.join(config['save_path'], 'reins_focal_lr_2'),
+        # os.path.join(config['save_path'], 'reins_focal_lr_3'),
+        # os.path.join(config['save_path'], 'reins_focal_lr_4'),
+        # os.path.join(config['save_path'], 'reins_focal_lr_5'),
         
         # os.path.join(config['save_path'], 'reins_adafocal1'),
         # os.path.join(config['save_path'], 'reins_adafocal2'),
         # os.path.join(config['save_path'], 'reins_adafocal3'),
         # os.path.join(config['save_path'], 'reins_adafocal4'),
     ]
+    
+    model_names = [os.path.basename(path) for path in save_paths]
 
     variant = dino_variant._small_variant
     models = initialize_models(save_paths, variant, config, device)
     test_loader, valid_loader = setup_data_loaders(args, data_path, batch_size)
     
     # Step 1: Compute greedy soup parameters
-    greedy_soup_params, model1 = greedy_soup_ensemble(models, valid_loader, device)
+    greedy_soup_params, model1 = greedy_soup_ensemble(models, model_names, valid_loader, device)
 
     # Evaluate the final model on the test set
     model1.load_state_dict(greedy_soup_params)

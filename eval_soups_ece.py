@@ -53,11 +53,18 @@ def setup_data_loaders(args, data_path, batch_size):
     return test_loader, valid_loader
 
 # Greedy soup model ensembling
-def greedy_soup_ensemble(models, valid_loader, device):
+def greedy_soup_ensemble(models, model_names, valid_loader, device):
     # Calculate ECE for each model and sort them by ECE in ascending order (lower ECE is better)
     ece_list = [validate(model, valid_loader, device) for model in models]
-    sorted_models = sorted([(model, ece) for model, ece in zip(models, ece_list)], key=lambda x: x[1])
-    print(f'Sorted models ECE: {sorted_models[0][1]}, {sorted_models[1][1]}, {sorted_models[2][1]}, {sorted_models[3][1]}\n')
+    model_ece_pairs = [(model, ece, name) for model, ece, name in zip(models, ece_list, model_names)]
+    
+    # Sort models based on ECE
+    sorted_models = sorted(model_ece_pairs, key=lambda x: x[1])
+    
+    # Print each model's name and ECE
+    print("Sorted models with ECE performance:")
+    for model, ece, name in sorted_models:
+        print(f'Model: {name}, ECE: {ece}')
 
     best_ece = sorted_models[0][1]
     greedy_soup_params = sorted_models[0][0].state_dict()
@@ -68,8 +75,7 @@ def greedy_soup_ensemble(models, valid_loader, device):
     for i in range(1, len(models)):
         new_ingredient_params = sorted_models[i][0].state_dict()
         num_ingredients = len(greedy_soup_ingredients)
-        print(f'Adding ingredient {i+1} to the greedy soup.')
-        print(f'Num ingredients: {num_ingredients}')
+        print(f'Adding ingredient {i+1} ({sorted_models[i][2]}) to the greedy soup. Num ingredients: {num_ingredients}')
         
         # Backup current greedy_soup_params before adding new ingredient
         previous_greedy_soup_params = {k: v.clone() for k, v in greedy_soup_params.items()}
@@ -112,7 +118,6 @@ def greedy_soup_ensemble(models, valid_loader, device):
             sorted_models[0][0].load_state_dict(greedy_soup_params)  # Load the actual best parameters
             print(f'<No improvement. Reverting to best-known parameters.>\n')
         
-
     return greedy_soup_params, sorted_models[0][0]
 
 def train():
@@ -150,13 +155,15 @@ def train():
         # os.path.join(config['save_path'], 'reins_adafocal3'),
         # os.path.join(config['save_path'], 'reins_adafocal4'),
     ]
+    
+    model_names = [os.path.basename(path) for path in save_paths]
 
     variant = dino_variant._small_variant
     models = initialize_models(save_paths, variant, config, device)
     test_loader, valid_loader = setup_data_loaders(args, data_path, batch_size)
     
     # Step 1: Compute greedy soup parameters
-    greedy_soup_params, model1 = greedy_soup_ensemble(models, valid_loader, device)
+    greedy_soup_params, model1 = greedy_soup_ensemble(models, model_names, valid_loader, device)
 
     # Evaluate the final model on the test set
     model1.load_state_dict(greedy_soup_params)
