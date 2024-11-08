@@ -61,6 +61,8 @@ def validation_accuracy(model, loader, device, mode = 'rein'):
             inputs, targets = inputs.to(device), targets.to(device)
             if targets.ndim > 1 and targets.size(1) > 1:
                 targets = torch.argmax(targets, dim=1)
+            if targets.ndim > 1:
+                targets = targets.view(-1) 
             outputs = out(model, inputs)
             _, predicted = outputs.max(1)  
             correct += predicted.eq(targets).sum().item()

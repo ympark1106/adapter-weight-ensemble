@@ -1,6 +1,9 @@
 import warnings
 warnings.filterwarnings("ignore", message="xFormers is not available")
-
+import time
+from datetime import timedelta
+import sys
+sys.path.append("/home/youmin/workspace/VFMs-Adapters-Ensemble/adapter_ensemble")
 
 import os
 os.environ['KMP_DUPLICATE_LIB_OK']='True'
@@ -20,7 +23,7 @@ import rein
 
 import dino_variant
 from sklearn.metrics import f1_score
-from data import cifar10, cifar100, cub, ham10000
+from data import cifar10, cifar100, cub, ham10000, bloodmnist, pathmnist 
 from losses import RankMixup_MNDCG, RankMixup_MRL, focal_loss, focal_loss_adaptive_gamma
 
 def count_trainable_params(model):
@@ -66,7 +69,11 @@ def train():
     elif args.data == 'cub':
         train_loader, valid_loader = cub.get_train_val_loader(data_path, batch_size=32, scale_size=256, crop_size=224, num_workers=8, pin_memory=True)
     elif args.data == 'ham10000':
-        train_loader, valid_loader, test_loader = ham10000.get_dataloaders(data_path, batch_size=32, num_workers=4)
+        train_loader, valid_loader, _ = ham10000.get_dataloaders(data_path, batch_size=32, num_workers=4)
+    elif args.data == 'bloodmnist':
+        train_loader, valid_loader, _ = bloodmnist.get_dataloader(batch_size=32, download=True, num_workers=4)
+    elif args.data == 'pathmnist':
+        train_loader, valid_loader, _ = pathmnist.get_dataloader(batch_size=32, download=True, num_workers=4)
     
         
     if args.netsize == 's':
@@ -105,12 +112,17 @@ def train():
 
     
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay = 1e-5)
+    # optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay = 1e-6)
+
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, lr_decay)
     saver = timm.utils.CheckpointSaver(model, optimizer, checkpoint_dir= save_path, max_history = 1) 
 
     # f = open(os.path.join(save_path, 'epoch_acc.txt'), 'w')
     avg_accuracy = 0.0
+    start_time = time.time()
+    
     for epoch in range(max_epoch):
+        epoch_start_time = time.time()
         ## training
         model.train()
         total_loss = 0
@@ -121,6 +133,9 @@ def train():
             
             if targets.ndim > 1 and targets.size(1) > 1:
                 targets = torch.argmax(targets, dim=1)
+                
+            if targets.ndim > 1:
+                targets = targets.view(-1) 
             
             optimizer.zero_grad()
             
@@ -134,14 +149,22 @@ def train():
 
             total_loss += loss
             total += targets.size(0)
-            _, predicted = outputs[:len(targets)].max(1)        
-            # _, predicted = outputs.max(1)    
+            
+            # _, predicted = outputs[:len(targets)].max(1)        
+            _, predicted = outputs.max(1)    
             correct += predicted.eq(targets).sum().item()            
             print('\r', batch_idx, len(train_loader), 'Loss: %.3f | Acc: %.3f%% (%d/%d)'
                         % (total_loss/(batch_idx+1), 100.*correct/total, correct, total), end = '')
+            
             train_accuracy = correct/total
                   
         train_avg_loss = total_loss/len(train_loader)
+        epoch_duration = time.time() - epoch_start_time
+        epoch_time = str(timedelta(seconds=epoch_duration))
+        remaining_time = (max_epoch - (epoch + 1)) * epoch_duration
+        formatted_remaining_time = str(timedelta(seconds=remaining_time))
+        print(f"\nEpoch {epoch} took {epoch_time}")
+        print(f"Estimated remaining training time: {formatted_remaining_time}")
         print()
 
         ## validation
@@ -158,6 +181,9 @@ def train():
         saver.save_checkpoint(epoch, metric = valid_accuracy)
         print('EPOCH {:4}, TRAIN [loss - {:.4f}, acc - {:.4f}], VALID [acc - {:.4f}]\n'.format(epoch, train_avg_loss, train_accuracy, valid_accuracy))
         print(scheduler.get_last_lr())
+    
+    total_duration = time.time() - start_time
+    print(f"Total training time: {total_duration:.2f} seconds")
 
     with open(os.path.join(save_path, 'avgacc.txt'), 'w') as f:
         f.write(str(avg_accuracy/10))

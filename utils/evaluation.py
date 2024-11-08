@@ -20,6 +20,10 @@ def compute_acc_bin(conf_thresh_lower, conf_thresh_upper, conf, pred, true):
     Returns:
         (accuracy, avg_conf, len_bin): accuracy of bin, confidence of bin and number of elements in bin.
     """
+    true = np.array(true).reshape(-1)  
+    pred = np.array(pred).reshape(-1)
+    conf = np.array(conf).reshape(-1)
+    
     filtered_tuples = [x for x in zip(pred, true, conf) if x[2] > conf_thresh_lower and x[2] <= conf_thresh_upper]
     if len(filtered_tuples) < 1:
         return 0,0,0
@@ -46,6 +50,9 @@ def ECE(conf, pred, true, bin_size = 0.1):
     Returns:
         ece: expected calibration error
     """
+    true = np.array(true).reshape(-1)  
+    pred = np.array(pred).reshape(-1)
+    conf = np.array(conf).reshape(-1)
     
     upper_bounds = np.arange(bin_size, 1+bin_size, bin_size)  # Get bounds of bins
     
@@ -72,7 +79,10 @@ def OE(conf, pred, true, bin_size = 0.1):
     Returns:
         ece: expected calibration error
     """
-    
+    true = np.array(true).reshape(-1)  
+    pred = np.array(pred).reshape(-1)
+    conf = np.array(conf).reshape(-1)
+
     upper_bounds = np.arange(bin_size, 1+bin_size, bin_size)  # Get bounds of bins
     
     n = len(conf)
@@ -100,6 +110,9 @@ def MCE(conf, pred, true, bin_size = 0.1):
     Returns:
         mce: maximum calibration error
     """
+    true = np.array(true).reshape(-1)  
+    pred = np.array(pred).reshape(-1)
+    conf = np.array(conf).reshape(-1)
     
     upper_bounds = np.arange(bin_size, 1+bin_size, bin_size)
     

@@ -20,7 +20,7 @@ import rein
 
 import dino_variant
 from sklearn.metrics import f1_score
-from data import cifar10, cifar100, cub, ham10000
+from data import cifar10, cifar100, cub, ham10000, bloodmnist
 from losses import RankMixup_MNDCG, RankMixup_MRL, focal_loss, focal_loss_adaptive_gamma
 
 def count_trainable_params(model):
@@ -67,6 +67,8 @@ def train():
         train_loader, valid_loader = cub.get_train_val_loader(data_path, batch_size=32, scale_size=256, crop_size=224, num_workers=8, pin_memory=True)
     elif args.data == 'ham10000':
         train_loader, valid_loader, test_loader = ham10000.get_dataloaders(data_path, batch_size=32, num_workers=4)
+    elif args.data == 'bloodmnist':
+        train_loader, valid_loader,_ = bloodmnist.get_dataloader(data_path, batch_size=32,num_workers=4)
         
     if args.netsize == 's':
         model_load = dino_variant._small_dino

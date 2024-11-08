@@ -1,0 +1,8 @@
+name: bloodmnist
+
+data_root: /home/youmin/workspace/VFMs-Adapters-Ensemble/bloodmnist
+batch_size: 32
+epoch: 100
+num_classes: 8
+save_path: ./checkpoints/checkpoints_bloodmnist
+

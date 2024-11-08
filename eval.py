@@ -18,7 +18,7 @@ import random
 import rein
 
 import dino_variant
-from data import cifar10, cifar100, cub, ham10000
+from data import cifar10, cifar100, cub, ham10000, bloodmnist, pathmnist
 
 
 def rein_forward(model, inputs):
@@ -94,6 +94,10 @@ def train():
         test_loader = cub.get_test_loader(data_path, batch_size=32, scale_size=256, crop_size=224, num_workers=4, pin_memory=True)
     elif args.data == 'ham10000':
         train_loader, valid_loader, test_loader = ham10000.get_dataloaders(data_path, batch_size=32, num_workers=4)
+    elif args.data == 'bloodmnist':
+        train_loader, test_loader, valid_loader = bloodmnist.get_dataloader(batch_size, download=True, num_workers=4)
+    elif args.data == 'pathmnist':
+        train_loader, test_loader, valid_loader = pathmnist.get_dataloader(batch_size, download=True, num_workers=4)
         
 
 

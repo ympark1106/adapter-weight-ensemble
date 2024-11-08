@@ -152,16 +152,19 @@ def train():
     batch_size = int(config['batch_size'])
 
     save_paths = [
-        os.path.join(config['save_path'], 'reins_ce1'),
-        os.path.join(config['save_path'], 'reins_ce2'),
-        os.path.join(config['save_path'], 'reins_ce3'),
-        os.path.join(config['save_path'], 'reins_ce4'),
+        # os.path.join(config['save_path'], 'reins_ce1'),
+        # os.path.join(config['save_path'], 'reins_ce2'),
+        # os.path.join(config['save_path'], 'reins_ce3'),
+        # os.path.join(config['save_path'], 'reins_ce4'),
         
-        # os.path.join(config['save_path'], 'reins_focal1'),
-        # os.path.join(config['save_path'], 'reins_focal2'),
-        # os.path.join(config['save_path'], 'reins_focal3'),
-        # os.path.join(config['save_path'], 'reins_focal4'),
-        # os.path.join(config['save_path'], 'reins_focal5'),
+        os.path.join(config['save_path'], 'reins_focal1'),
+        os.path.join(config['save_path'], 'reins_focal2'),
+        os.path.join(config['save_path'], 'reins_focal3'),
+        os.path.join(config['save_path'], 'reins_focal4'),
+        os.path.join(config['save_path'], 'reins_focal5'),
+        os.path.join(config['save_path'], 'reins_focal_lr_1'),
+        os.path.join(config['save_path'], 'reins_focal_lr_2'),
+        os.path.join(config['save_path'], 'reins_focal_lr_3'),
         
         # os.path.join(config['save_path'], 'reins_adafocal1'),
         # os.path.join(config['save_path'], 'reins_adafocal2'),
@@ -173,7 +176,7 @@ def train():
     models = initialize_models(save_paths, variant, config, device)
     test_loader, valid_loader = setup_data_loaders(args, data_path, batch_size)
 
-    optimized_weights = optimize_weights_bayesian_optimization(models, valid_loader, device, pruning_threshold=0.05, n_calls=20)
+    optimized_weights = optimize_weights_bayesian_optimization(models, valid_loader, device, pruning_threshold=0.05, n_calls=10)
 
     ensemble_params = calculate_ensemble_params(models, optimized_weights)
     models[0].load_state_dict(ensemble_params)
