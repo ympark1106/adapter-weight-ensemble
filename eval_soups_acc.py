@@ -35,7 +35,7 @@ def setup_data_loaders(args, data_path, batch_size):
     elif args.data == 'ham10000':
         _, valid_loader, test_loader = ham10000.get_dataloaders(data_path, batch_size=32, num_workers=4)
     elif args.data == 'bloodmnist':
-        _, test_loader, valid_loader = bloodmnist.get_dataloader(batch_size, shuffle=True, download=True, num_workers=4)
+        _, test_loader, valid_loader = bloodmnist.get_dataloader(batch_size,download=True, num_workers=4)
     else:
         raise ValueError(f"Unsupported data type: {args.data}")
     
@@ -87,10 +87,13 @@ def greedy_soup_ensemble(models, model_names, valid_loader, device):
     for i in range(1, len(sorted_models)):
         print(f'Testing model {i+1} ({sorted_models[i][2]}) of {len(sorted_models)}')
         
+        previous_greedy_soup_params = {k: v.clone() for k, v in greedy_soup_params.items()}
+        
         # New model parameters to test as an additional ingredient
         new_ingredient_params = sorted_models[i][0].state_dict()
         num_ingredients = len(greedy_soup_ingredients)
-        
+        print(f'Adding ingredient {i+1} ({sorted_models[i][2]}) to the greedy soup. Num ingredients: {num_ingredients}')    
+    
         # Create potential new soup parameters by averaging with the new ingredient
         potential_greedy_soup_params = {
             k: greedy_soup_params[k].clone() * (num_ingredients / (num_ingredients + 1)) +
@@ -104,7 +107,8 @@ def greedy_soup_ensemble(models, model_names, valid_loader, device):
         
         # Calculate validation accuracy with the potential new soup parameters
         held_out_val_accuracy = validation_accuracy(sorted_models[0][0], valid_loader, device)
-        print(f'Held-out validation accuracy: {held_out_val_accuracy}')
+        
+        print(f'Held-out validation accuracy: {held_out_val_accuracy}, best accuracy so far: {max_accuracy}.\n')
         
         # Update greedy soup if accuracy improves, otherwise revert to original parameters
         if held_out_val_accuracy > max_accuracy:
@@ -114,11 +118,11 @@ def greedy_soup_ensemble(models, model_names, valid_loader, device):
             print(f'[New greedy soup ingredient added. Number of ingredients: {len(greedy_soup_ingredients)}]\n')
         else:
             # Revert to the best-known parameters if the new ingredient didn’t improve accuracy
+            greedy_soup_params = previous_greedy_soup_params
             sorted_models[0][0].load_state_dict(greedy_soup_params)  # Revert to best params
             print(f'[No improvement. Reverting to best-known parameters.]\n')
 
     return greedy_soup_params, sorted_models[0][0]
-
 
 
 
@@ -156,15 +160,15 @@ def train():
         # os.path.join(config['save_path'], 'reins_ce3'),
         # os.path.join(config['save_path'], 'reins_ce4'),
         
-        os.path.join(config['save_path'], 'reins_focal1'),
-        os.path.join(config['save_path'], 'reins_focal2'),
-        os.path.join(config['save_path'], 'reins_focal3'),
-        os.path.join(config['save_path'], 'reins_focal4'),
-        os.path.join(config['save_path'], 'reins_focal5'),
+        os.path.join(config['save_path'], 'reins_focal_1'),
+        os.path.join(config['save_path'], 'reins_focal_2'),
+        os.path.join(config['save_path'], 'reins_focal_3'),
+        os.path.join(config['save_path'], 'reins_focal_4'),
+        os.path.join(config['save_path'], 'reins_focal_5'),
         os.path.join(config['save_path'], 'reins_focal_lr_1'),
         os.path.join(config['save_path'], 'reins_focal_lr_2'),
-        # os.path.join(config['save_path'], 'reins_focal_lr_3'),
-        # os.path.join(config['save_path'], 'reins_focal_lr_4'),
+        os.path.join(config['save_path'], 'reins_focal_lr_3'),
+        os.path.join(config['save_path'], 'reins_focal_lr_4'),
         # os.path.join(config['save_path'], 'reins_focal_lr_5'),
         
         # os.path.join(config['save_path'], 'reins_adafocal1'),
