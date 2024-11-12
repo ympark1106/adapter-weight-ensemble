@@ -1,34 +1,33 @@
+import torch.nn as nn    
 from .reins import Reins
 from .dino_v2 import DinoVisionTransformer
 from .utils import set_requires_grad, set_train
  
 
-class ReinsDinoVisionTransformer(DinoVisionTransformer):
+class ReinsDinoVisionTransformer_Dropout(DinoVisionTransformer):
     def __init__(
         self,
+        dropout_rate=0.5,  # Dropout rate 추가
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.reins = Reins(
-            num_layers = kwargs['depth'],
-            embed_dims = kwargs['embed_dim'],
-            patch_size = kwargs['patch_size'],
+            num_layers=kwargs['depth'],
+            embed_dims=kwargs['embed_dim'],
+            patch_size=kwargs['patch_size'],
         )
+        self.dropout = nn.Dropout(dropout_rate)  # Dropout layer 추가
 
     def forward_features(self, x, masks=None):
         B, _, h, w = x.shape
         H, W = h // self.patch_size, w // self.patch_size
         x = self.prepare_tokens_with_masks(x, masks)
-        outs = []
-        
+
         for idx, blk in enumerate(self.blocks):
             x = blk(x)
-            x = self.reins.forward(
-                x,
-                idx,
-                batch_first=True,
-                has_cls_token=True,
-            )
+            x = self.reins.forward(x, idx, batch_first=True, has_cls_token=True)
+            x = self.dropout(x)  # MC Dropout 적용
+
         return x
     
 

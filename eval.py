@@ -22,11 +22,29 @@ from data import cifar10, cifar100, cub, ham10000, bloodmnist, pathmnist
 
 
 def rein_forward(model, inputs):
+    model.eval()
     output = model.forward_features(inputs)[:, 0, :]
     output = model.linear(output)
     output = torch.softmax(output, dim=1)
 
     return output
+
+def rein_forward_mc_dropout(model, inputs, num_samples=10):
+    model.train()  # Dropout을 활성화하기 위해 모델을 train 모드로 설정
+    outputs = []
+
+    for _ in range(num_samples):
+        with torch.no_grad():
+            output = model.forward_features(inputs)[:, 0, :]
+            output = model.linear(output)
+            output = torch.softmax(output, dim=1)
+            outputs.append(output)
+    # print(torch.stack(outputs).shape)
+
+    # 평균을 통해 최종 예측 생성
+    output = torch.mean(torch.stack(outputs), dim=0)
+    return output
+
 
 
 def rein3_forward(model, inputs):
@@ -99,8 +117,6 @@ def train():
     elif args.data == 'pathmnist':
         train_loader, test_loader, valid_loader = pathmnist.get_dataloader(batch_size, download=True, num_workers=4)
         
-
-
         
     if args.netsize == 's':
         model_load = dino_variant._small_dino
@@ -114,12 +130,12 @@ def train():
         model = rein.ReinsDinoVisionTransformer(
             **variant
         )
-    if args.type == 'rein3':
-        model = rein.ReinsDinoVisionTransformer_3_head(
+    elif args.type == 'rein_dropout':
+        model = rein.ReinsDinoVisionTransformer_Dropout(
             **variant,
-            # token_lengths = [33, 33, 33]
-            token_lengths= [100, 100, 100]
+            dropout_rate=0.2
         )
+
     model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
     model.load_state_dict(dino_state_dict, strict=False)
     model.to(device)
@@ -127,11 +143,13 @@ def train():
     state_dict = torch.load(os.path.join(save_path, 'last.pth.tar'), map_location='cpu')['state_dict']
     # state_dict = torch.load(os.path.join(save_path, 'model_best.pth.tar'), map_location='cpu')['state_dict']
     model.load_state_dict(state_dict, strict=True)
+    
+    if args.type != 'rein_dropout':
+        model.eval()
             
     # print(model)
 
     ## validation
-    model.eval()
     test_accuracy = validation_accuracy(model, test_loader, device, mode=args.type)
     print('test acc:', test_accuracy)
 
@@ -144,8 +162,10 @@ def train():
             if args.type == 'rein':
                 output = rein_forward(model, inputs)
                 # print(output.shape)  # 출력 클래스 수 확인
-            elif args.type == 'rein3':
-                output = rein3_forward(model, inputs)
+            elif args.type == 'rein_dropout':
+                output = rein_forward_mc_dropout(model, inputs, num_samples=10)
+                # print(output.shape)
+                
             outputs.append(output.cpu())
             targets.append(target.cpu())
     outputs = torch.cat(outputs).numpy()

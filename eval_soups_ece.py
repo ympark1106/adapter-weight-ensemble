@@ -9,7 +9,7 @@ import numpy as np
 
 from utils import read_conf, validation_accuracy, ModelWithTemperature, validate, evaluate, calculate_ece, calculate_nll
 import dino_variant
-from data import cifar10, cifar100, cub, ham10000, bloodmnist
+from data import cifar10, cifar100, cub, ham10000, bloodmnist, pathmnist
 import rein
 
 # Model forward function
@@ -46,7 +46,9 @@ def setup_data_loaders(args, data_path, batch_size):
     elif args.data == 'ham10000':
         _, valid_loader, test_loader = ham10000.get_dataloaders(data_path, batch_size=32, num_workers=4)
     elif args.data == 'bloodmnist':
-        _, valid_loader, test_loader = bloodmnist.get_dataloader(data_path, batch_size=32, num_workers=4)
+        _, valid_loader, test_loader = bloodmnist.get_dataloader(batch_size=32, download=True, num_workers=4)
+    elif args.data == 'pathmnist':
+        _, valid_loader, test_loader = pathmnist.get_dataloader(batch_size=32, download=True, num_workers=4)
     else:
         raise ValueError(f"Unsupported data type: {args.data}")
     
@@ -56,6 +58,7 @@ def setup_data_loaders(args, data_path, batch_size):
 def greedy_soup_ensemble(models, model_names, valid_loader, device):
     # Calculate ECE for each model and sort them by ECE in ascending order (lower ECE is better)
     ece_list = [validate(model, valid_loader, device) for model in models]
+    n = len(ece_list)
     model_ece_pairs = [(model, ece, name) for model, ece, name in zip(models, ece_list, model_names)]
     
     # Sort models based on ECE
@@ -70,7 +73,9 @@ def greedy_soup_ensemble(models, model_names, valid_loader, device):
     greedy_soup_params = sorted_models[0][0].state_dict()
     greedy_soup_ingredients = [sorted_models[0][0]]
     
-    TOLERANCE = 0.025  # Acceptable tolerance for ECE
+    TOLERANCE = sorted_models[n-1][1] - sorted_models[0][1] # Acceptable tolerance for ECE
+    # TOLERANCE = 0.01
+    print(f'Tolerance: {TOLERANCE}')
 
     for i in range(1, len(models)):
         new_ingredient_params = sorted_models[i][0].state_dict()
@@ -139,13 +144,13 @@ def train():
         # os.path.join(config['save_path'], 'reins_ce3'),
         # os.path.join(config['save_path'], 'reins_ce4'),
         
-        os.path.join(config['save_path'], 'reins_focal1'),
-        os.path.join(config['save_path'], 'reins_focal2'),
-        os.path.join(config['save_path'], 'reins_focal3'),
-        os.path.join(config['save_path'], 'reins_focal4'),
-        os.path.join(config['save_path'], 'reins_focal5'),
-        os.path.join(config['save_path'], 'reins_focal_lr_1'),
-        os.path.join(config['save_path'], 'reins_focal_lr_2'),
+        os.path.join(config['save_path'], 'reins_focal_1'),
+        os.path.join(config['save_path'], 'reins_focal_2'),
+        os.path.join(config['save_path'], 'reins_focal_3'),
+        os.path.join(config['save_path'], 'reins_focal_4'),
+        os.path.join(config['save_path'], 'reins_focal_5'),
+        # os.path.join(config['save_path'], 'reins_focal_lr_1'),
+        # os.path.join(config['save_path'], 'reins_focal_lr_2'),
         # os.path.join(config['save_path'], 'reins_focal_lr_3'),
         # os.path.join(config['save_path'], 'reins_focal_lr_4'),
         # os.path.join(config['save_path'], 'reins_focal_lr_5'),

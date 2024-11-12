@@ -110,8 +110,8 @@ def train():
     # criterion = focal_loss_adaptive_gamma.FocalLossAdaptive()
     model.eval()
 
-    # optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay = 1e-5)
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay = 1e-6)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay = 1e-5)
+    # optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay = 1e-6)
 
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, lr_decay)
     saver = timm.utils.CheckpointSaver(model, optimizer, checkpoint_dir= save_path, max_history = 1) 
@@ -183,7 +183,7 @@ def train():
     
     total_duration = time.time() - start_time
     totoal_time = str(timedelta(seconds=total_duration))
-    print(f"Total training time: {totoal_time:.2f} seconds")
+    print(f"Total training time: {totoal_time}")
 
     with open(os.path.join(save_path, 'avgacc.txt'), 'w') as f:
         f.write(str(avg_accuracy/10))

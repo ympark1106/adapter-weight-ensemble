@@ -224,7 +224,7 @@ def calculate_nll(outputs, targets):
     """
     # Convert numpy arrays to PyTorch tensors
     outputs_tensor = torch.tensor(outputs, requires_grad=True)
-    targets_tensor = torch.tensor(targets, dtype=torch.long)
+    targets_tensor = torch.tensor(targets, dtype=torch.long).view(-1)
     
     # Compute the negative log likelihood
     nll = F.nll_loss(torch.log(outputs_tensor), targets_tensor)

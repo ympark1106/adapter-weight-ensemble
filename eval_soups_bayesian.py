@@ -13,7 +13,7 @@ from skopt.space import Real
 from utils import read_conf, validation_accuracy, validate, evaluate, calculate_ece, calculate_nll
 
 import dino_variant
-from data import cifar10, cifar100, cub, ham10000
+from data import cifar10, cifar100, cub, ham10000, bloodmnist, pathmnist
 import rein
 
 
@@ -49,6 +49,8 @@ def setup_data_loaders(args, data_path, batch_size):
         _, valid_loader = cub.get_train_val_loader(data_path, batch_size=32, scale_size=256, crop_size=224, num_workers=4, pin_memory=True)
     elif args.data == 'ham10000':
         _, valid_loader, test_loader = ham10000.get_dataloaders(data_path, batch_size=32, num_workers=4)
+    elif args.data == 'bloodmnist':
+        _, valid_loader, test_loader = bloodmnist.get_dataloader(batch_size=32, download=True, num_workers=4)
     else:
         raise ValueError(f"Unsupported data type: {args.data}")
     
@@ -157,14 +159,16 @@ def train():
         # os.path.join(config['save_path'], 'reins_ce3'),
         # os.path.join(config['save_path'], 'reins_ce4'),
         
-        os.path.join(config['save_path'], 'reins_focal1'),
-        os.path.join(config['save_path'], 'reins_focal2'),
-        os.path.join(config['save_path'], 'reins_focal3'),
-        os.path.join(config['save_path'], 'reins_focal4'),
-        os.path.join(config['save_path'], 'reins_focal5'),
+        os.path.join(config['save_path'], 'reins_focal_1'),
+        os.path.join(config['save_path'], 'reins_focal_2'),
+        os.path.join(config['save_path'], 'reins_focal_3'),
+        os.path.join(config['save_path'], 'reins_focal_4'),
+        os.path.join(config['save_path'], 'reins_focal_5'),
         os.path.join(config['save_path'], 'reins_focal_lr_1'),
         os.path.join(config['save_path'], 'reins_focal_lr_2'),
         os.path.join(config['save_path'], 'reins_focal_lr_3'),
+        os.path.join(config['save_path'], 'reins_focal_lr_4'),
+        # os.path.join(config['save_path'], 'reins_focal_lr_5'),
         
         # os.path.join(config['save_path'], 'reins_adafocal1'),
         # os.path.join(config['save_path'], 'reins_adafocal2'),
