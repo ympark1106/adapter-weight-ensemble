@@ -182,7 +182,8 @@ def evaluate(probs, y_true, verbose = False, normalize = False, bins = 15, is_sp
         print("OE:", oe)
         print("Loss:", loss)
         # print("brier:", brier)
-        print(ece, mce, oe)
+        # print(ece, mce, oe)
+        
     
     # return (error, ece, mce, loss) # brier)
     

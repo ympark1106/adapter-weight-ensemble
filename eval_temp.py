@@ -18,22 +18,26 @@ from utils.temperature_scaling import ModelWithTemperature
 
 import random
 import rein
-
+import torch.nn.functional as F
 import dino_variant
 from data import cifar10, cifar100, cub, ham10000, bloodmnist, pathmnist
 
 
-def rein_forward(model, inputs):
-    # 내부 모델 접근
+def rein_forward(model, inputs, temp=1.0, post_temp=False):
     if isinstance(model, ModelWithTemperature):
-        output = model.model.forward_features(inputs)[:, 0, :]  # 내부 모델의 forward_features 호출
-        output = model.model.linear(output)
-        output = torch.softmax(output, dim=1)
+        logits = model.model.forward_features(inputs)[:, 0, :]
+        logits = model.model.linear(logits)
     else:
-        output = model.forward_features(inputs)[:, 0, :]  # 원래 모델 호출
-        output = model.linear(output)
-        output = torch.softmax(output, dim=1)
-    return output
+        logits = model.forward_features(inputs)[:, 0, :]
+        logits = model.linear(logits)
+
+    if post_temp:
+        if not isinstance(temp, torch.Tensor):
+            temp = torch.tensor(temp, device=logits.device)
+        temp = temp.to(logits.device)  # GPU로 이동
+        logits = logits / temp
+    
+    return logits
 
 
 def train():
@@ -96,11 +100,8 @@ def train():
     model_temp = ModelWithTemperature(model)
     print(model_temp)
     model_temp.set_temperature(valid_loader)
-    model_temp.eval()
-    
     temp = model_temp.get_temperature()
-    
-    print('Temperature:', model_temp.temperature)
+    print(f"Optimal Temperature: {temp}")
     
     ## validation
     test_accuracy = validation_accuracy(model_temp, test_loader, device, mode=args.type)
@@ -113,10 +114,10 @@ def train():
             # print(f"Batch {batch_idx} targets:", target)
             inputs, target = inputs.to(device), target.to(device)
             if args.type == 'rein':
-                output = rein_forward(model_temp, inputs)
+                output = rein_forward(model_temp, inputs, temp=temp, post_temp=True)
                 # print(output.shape)  
-                
-            outputs.append(output.cpu())
+            probabilities = F.softmax(output, dim=1)  # Softmax로 확률 변환
+            outputs.append(probabilities.cpu())
             targets.append(target.cpu())
     outputs = torch.cat(outputs).numpy()
     targets = torch.cat(targets).numpy()

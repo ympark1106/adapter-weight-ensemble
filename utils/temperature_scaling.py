@@ -21,7 +21,7 @@ class ModelWithTemperature(nn.Module):
     def __init__(self, model, device = 'cuda:0'):
         super(ModelWithTemperature, self).__init__()
         self.model = model
-        self.temperature = nn.Parameter(torch.ones(1) * 1.0) # 원래 1.5였음
+        self.temperature = nn.Parameter(torch.ones(1) * 1.5) 
         self.device = device
         
         
