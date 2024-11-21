@@ -22,7 +22,6 @@ from data import cifar10, cifar100, cub, ham10000, bloodmnist, pathmnist
 
 
 def rein_forward(model, inputs):
-    model.eval()
     output = model.forward_features(inputs)[:, 0, :]
     output = model.linear(output)
     output = torch.softmax(output, dim=1)
@@ -30,55 +29,22 @@ def rein_forward(model, inputs):
     return output
 
 def rein_forward_mc_dropout(model, inputs, num_samples=10):
-    model.train()  # Dropout을 활성화하기 위해 모델을 train 모드로 설정
     outputs = []
+    model.train()  # MC Dropout
 
-    for _ in range(num_samples):
+    for i in range(num_samples):
         with torch.no_grad():
             output = model.forward_features(inputs)[:, 0, :]
             output = model.linear(output)
             output = torch.softmax(output, dim=1)
             outputs.append(output)
+            # print(f"Sample {i+1} output mean: {output.mean().item()}")
     # print(torch.stack(outputs).shape)
 
-    # 평균을 통해 최종 예측 생성
     output = torch.mean(torch.stack(outputs), dim=0)
+    # print(f"MC Dropout 평균화 후 output shape: {output.shape}")
     return output
 
-
-
-def rein3_forward(model, inputs):
-    f = model.forward_features1(inputs)
-    f = f[:, 0, :]
-    outputs1 = model.linear(f)
-
-    f = model.forward_features2(inputs)
-    f = f[:, 0, :]
-    outputs2 = model.linear(f)
-
-    f = model.forward_features3(inputs)
-    f = f[:, 0, :]
-    outputs3 = model.linear(f)
-
-    outputs1 = torch.softmax(outputs1, dim=1)
-    outputs2 = torch.softmax(outputs2, dim=1)
-    outputs3 = torch.softmax(outputs3, dim=1)
-
-    return (outputs1 + outputs2 + outputs3)/3
-
-
-def ensemble_forward(models, inputs):
-    ensemble_output = 0
-    
-    for model in models:
-        output = model.forward_features(inputs)[:, 0, :]
-        output = model.linear(output)
-        output = torch.softmax(output, dim=1)
-        ensemble_output += output
-    
-    # Average the outputs
-    ensemble_output /= len(models)
-    return ensemble_output
 
 
 def train():
@@ -89,8 +55,6 @@ def train():
     parser.add_argument('--save_path', '-s', type=str)
     parser.add_argument('--type', '-t', default= 'rein', type=str)
     args = parser.parse_args()
-
-
 
     config = read_conf('conf/data/'+args.data+'.yaml')
 
@@ -133,7 +97,7 @@ def train():
     elif args.type == 'rein_dropout':
         model = rein.ReinsDinoVisionTransformer_Dropout(
             **variant,
-            dropout_rate=0.2
+            dropout_rate=0.5
         )
 
     model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
@@ -144,7 +108,9 @@ def train():
     # state_dict = torch.load(os.path.join(save_path, 'model_best.pth.tar'), map_location='cpu')['state_dict']
     model.load_state_dict(state_dict, strict=True)
     
-    if args.type != 'rein_dropout':
+    if args.type == 'rein_dropout':
+        model.train() # MC Dropout
+    else:
         model.eval()
             
     # print(model)
@@ -161,7 +127,7 @@ def train():
             inputs, target = inputs.to(device), target.to(device)
             if args.type == 'rein':
                 output = rein_forward(model, inputs)
-                # print(output.shape)  # 출력 클래스 수 확인
+                # print(output.shape)  
             elif args.type == 'rein_dropout':
                 output = rein_forward_mc_dropout(model, inputs, num_samples=10)
                 # print(output.shape)

@@ -2,6 +2,7 @@ import torch
 import numpy as np
 from sklearn.metrics import roc_auc_score, f1_score, cohen_kappa_score, balanced_accuracy_score
 import torch.nn.functional as F
+from utils.temperature_scaling import ModelWithTemperature
 
 
 def validation_accuracy(model, loader, device, mode='rein'):
@@ -15,10 +16,17 @@ def validation_accuracy(model, loader, device, mode='rein'):
         return outputs
     
     def rein(model, inputs):
-        f = model.forward_features(inputs)
-        f = f[:, 0, :]
-        outputs = model.linear(f)
+        # ModelWithTemperature로 래핑된 경우 내부 모델에 접근
+        if isinstance(model, ModelWithTemperature):
+            f = model.model.forward_features(inputs)  # 내부 모델의 forward_features 호출
+            f = f[:, 0, :]
+            outputs = model.model.linear(f)  # 내부 모델의 linear 레이어 호출
+        else:
+            f = model.forward_features(inputs)  # 이미 원래 모델인 경우 그대로 호출
+            f = f[:, 0, :]  # CLS 토큰만 선택
+            outputs = model.linear(f)  # Linear 레이어 적용
         return outputs
+
     
     def rein3(model, inputs):
         f = model.forward_features1(inputs)
@@ -66,12 +74,17 @@ def validation_accuracy(model, loader, device, mode='rein'):
         out = rein3
     elif mode == 'rein_dropout':
         out = rein_dropout
+        model.train()
     elif mode == 'resnet':
         out = resnet
     else:
         out = linear
 
-    # model.eval()
+    if mode == 'rein_dropout':
+        model.train()
+    else:
+        model.eval()
+        
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(loader):
             inputs, targets = inputs.to(device), targets.to(device)

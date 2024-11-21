@@ -171,11 +171,13 @@ def train():
     greedy_soup_params, model = greedy_soup_ensemble(models, model_names, valid_loader, device, variant, config)
 
     # Evaluate the final model on the test set
+    # model1.load_state_dict(greedy_soup_params)
     model = get_model_from_sd(greedy_soup_params, variant, config, device)
     
     model_with_temp = ModelWithTemperature(model, device=device)
     model_with_temp.set_temperature(valid_loader)  # Apply temperature scaling
     
+    # model.eval()
     model_with_temp.eval()
     
     test_accuracy = validation_accuracy(model_with_temp, test_loader, device, mode=args.type)

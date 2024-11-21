@@ -13,7 +13,7 @@ class ReinsDinoVisionTransformer_Dropout(DinoVisionTransformer):
         super().__init__(**kwargs)
         self.reins = Reins(
             num_layers=kwargs['depth'],
-            embed_dims=kwargs['embed_dim'],
+            embed_dims=kwargs['embed_dim'], 
             patch_size=kwargs['patch_size'],
         )
         self.dropout = nn.Dropout(dropout_rate)  # Dropout layer 추가
@@ -29,7 +29,7 @@ class ReinsDinoVisionTransformer_Dropout(DinoVisionTransformer):
             x = self.dropout(x)  # MC Dropout 적용
 
         return x
-    
+
 
 
     def forward_features_full_rein(self, x, masks=None):
