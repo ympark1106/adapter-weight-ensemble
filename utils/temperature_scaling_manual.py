@@ -3,6 +3,7 @@ from torch import nn, optim
 from torch.nn import functional as F
 import matplotlib.pyplot as plt
 
+
 def rein_forward(model, inputs):
     output = model.forward_features(inputs)[:, 0, :]
     output = model.linear(output)
@@ -21,7 +22,7 @@ class ModelWithTemperature(nn.Module):
     def __init__(self, model, device = 'cuda:0'):
         super(ModelWithTemperature, self).__init__()
         self.model = model
-        self.temperature = nn.Parameter(torch.ones(1) * 1.4) 
+        self.temperature = 1.0
         self.device = device
         
         
@@ -50,16 +51,16 @@ class ModelWithTemperature(nn.Module):
         return logits / self.temperature
 
     # This function probably should live outside of this class, but whatever
-    def set_temperature(self, valid_loader):
+    def set_temperature(self,
+                        valid_loader,
+                        cross_validate='ece'):
         """
-        Tune the tempearature of the model (using the validation set).
-        We're going to set it to optimize NLL.
-        valid_loader (DataLoader): validation set loader
+        Tune the tempearature of the model (using the validation set) with cross-validation on ECE or NLL
         """
-        # self.to(device)
+        # self.cuda()
         self.model.eval()
         nll_criterion = nn.CrossEntropyLoss().to(self.device)
-        ece_criterion = _ECELoss().to(self.device)
+        ece_criterion = ECELoss().to(self.device)
 
         # First: collect all the logits and labels for the validation set
         logits_list = []
@@ -68,71 +69,62 @@ class ModelWithTemperature(nn.Module):
             for input, label in valid_loader:
                 input = input.to(self.device)
                 logits = rein_forward(self.model, input)
-                # print(logits.shape)                         # 임시 출력
-                logits_list.append(logits.cpu())
-                labels_list.append(label.cpu())
-            logits = torch.cat(logits_list)
-            labels = torch.cat(labels_list)
-            
+                logits_list.append(logits)
+                labels_list.append(label)
+            logits = torch.cat(logits_list).to(self.device)
+            labels = torch.cat(labels_list).to(self.device)
 
         # Calculate NLL and ECE before temperature scaling
         before_temperature_nll = nll_criterion(logits, labels).item()
         before_temperature_ece = ece_criterion(logits, labels).item()
         print('Before temperature - NLL: %.3f, ECE: %.3f' % (before_temperature_nll, before_temperature_ece))
 
-        # Next: optimize the temperature w.r.t. NLL
-        optimizer = optim.LBFGS([self.temperature], lr=0.01, max_iter=50)
+        nll_val = 10 ** 7
+        ece_val = 10 ** 7
+        T_opt_nll = 1.0
+        T_opt_ece = 1.0
+        T = 0.1
+        for i in range(100):
+            self.temperature = T
+            after_temperature_nll = nll_criterion(self.temperature_scale(logits), labels).item()
+            after_temperature_ece = ece_criterion(self.temperature_scale(logits), labels).item()
+            if nll_val > after_temperature_nll:
+                T_opt_nll = T
+                nll_val = after_temperature_nll
 
-        def eval():
-            optimizer.zero_grad()
-            loss = nll_criterion(self.temperature_scale(logits), labels)
-            # print(f"[DEBUG] Current temperature: {self.temperature.item()}, Loss: {loss.item()}")
-            loss.backward()
-            return loss
-        optimizer.step(eval)
+            if ece_val > after_temperature_ece:
+                T_opt_ece = T
+                ece_val = after_temperature_ece
+            T += 0.1
+
+        if cross_validate == 'ece':
+            self.temperature = T_opt_ece
+        else:
+            self.temperature = T_opt_nll
 
         # Calculate NLL and ECE after temperature scaling
         after_temperature_nll = nll_criterion(self.temperature_scale(logits), labels).item()
         after_temperature_ece = ece_criterion(self.temperature_scale(logits), labels).item()
-        print('Optimal temperature: %.3f' % self.temperature.item())
+        print('Optimal temperature: %.3f' % self.temperature)
         print('After temperature - NLL: %.3f, ECE: %.3f' % (after_temperature_nll, after_temperature_ece))
-        
+    
         # 시각화 코드
-        # plt.hist(F.softmax(logits, dim=1).cpu().detach().numpy().max(axis=1), bins=10, alpha=0.5, label="Before TS")
-        # plt.hist(F.softmax(logits / self.temperature, dim=1).cpu().detach().numpy().max(axis=1), bins=10, alpha=0.5, label="After TS")
-        # plt.legend()
-        # plt.show()  
-
-        return self
+        plt.hist(F.softmax(logits, dim=1).cpu().detach().numpy().max(axis=1), bins=10, alpha=0.5, label="Before TS")
+        plt.hist(F.softmax(logits / self.temperature, dim=1).cpu().detach().numpy().max(axis=1), bins=10, alpha=0.5, label="After TS")
+        plt.legend()
+        plt.show()  
+        
     
     def get_temperature(self):
         return self.temperature
 
 
-class _ECELoss(nn.Module):
-    """
-    Calculates the Expected Calibration Error of a model.
-    (This isn't necessary for temperature scaling, just a cool metric).
-
-    The input to this loss is the logits of a model, NOT the softmax scores.
-
-    This divides the confidence outputs into equally-sized interval bins.
-    In each bin, we compute the confidence gap:
-
-    bin_gap = | avg_confidence_in_bin - accuracy_in_bin |
-
-    We then return a weighted average of the gaps, based on the number
-    of samples in each bin
-
-    See: Naeini, Mahdi Pakdaman, Gregory F. Cooper, and Milos Hauskrecht.
-    "Obtaining Well Calibrated Probabilities Using Bayesian Binning." AAAI.
-    2015.
-    """
-    def __init__(self, n_bins=10):
-        """
-        n_bins (int): number of confidence interval bins
-        """
-        super(_ECELoss, self).__init__()
+class ECELoss(nn.Module):
+    '''
+    Compute ECE (Expected Calibration Error)
+    '''
+    def __init__(self, n_bins=15):
+        super(ECELoss, self).__init__()
         bin_boundaries = torch.linspace(0, 1, n_bins + 1)
         self.bin_lowers = bin_boundaries[:-1]
         self.bin_uppers = bin_boundaries[1:]

@@ -14,7 +14,7 @@ import timm
 import numpy as np
 from utils import read_conf, validation_accuracy, evaluate, validate, calculate_ece, calculate_nll
 
-from utils.temperature_scaling import ModelWithTemperature
+from utils.temperature_scaling_manual import ModelWithTemperature
 
 import random
 import rein
@@ -99,7 +99,7 @@ def train():
             
     model_temp = ModelWithTemperature(model)
     print(model_temp)
-    model_temp.set_temperature(valid_loader)
+    model_temp.set_temperature(valid_loader, cross_validate='ece')
     temp = model_temp.get_temperature()
     print(f"Optimal Temperature: {temp}")
     

@@ -196,7 +196,7 @@ def train():
     
     model_temp = ModelWithTemperature(model)
     print(model_temp)
-    model_temp.set_temperature(valid_loader)
+    model_temp.set_temperature(valid_loader, cross_validate='ece')
     temp = model_temp.get_temperature()
     print(f"Optimal Temperature: {temp}")
     
