@@ -21,7 +21,7 @@ class ModelWithTemperature(nn.Module):
     def __init__(self, model, device = 'cuda:0'):
         super(ModelWithTemperature, self).__init__()
         self.model = model
-        self.temperature = nn.Parameter(torch.ones(1) * 1.5) 
+        self.temperature = nn.Parameter(torch.ones(1) * 1.4) 
         self.device = device
         
         
@@ -81,7 +81,7 @@ class ModelWithTemperature(nn.Module):
         print('Before temperature - NLL: %.3f, ECE: %.3f' % (before_temperature_nll, before_temperature_ece))
 
         # Next: optimize the temperature w.r.t. NLL
-        optimizer = optim.LBFGS([self.temperature], lr=0.01, max_iter=50)
+        optimizer = optim.LBFGS([self.temperature], lr=0.01, max_iter=100)
 
         def eval():
             optimizer.zero_grad()

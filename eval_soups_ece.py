@@ -149,8 +149,8 @@ def train():
         os.path.join(config['save_path'], 'reins_focal_3'),
         os.path.join(config['save_path'], 'reins_focal_4'),
         os.path.join(config['save_path'], 'reins_focal_5'),
-        # os.path.join(config['save_path'], 'reins_focal_lr_1'),
-        # os.path.join(config['save_path'], 'reins_focal_lr_2'),
+        os.path.join(config['save_path'], 'reins_focal_lr_1'),
+        os.path.join(config['save_path'], 'reins_focal_lr_2'),
         # os.path.join(config['save_path'], 'reins_focal_lr_3'),
         # os.path.join(config['save_path'], 'reins_focal_lr_4'),
         # os.path.join(config['save_path'], 'reins_focal_lr_5'),
@@ -172,20 +172,17 @@ def train():
 
     # Evaluate the final model on the test set
     model = get_model_from_sd(greedy_soup_params, variant, config, device)
+    model.eval()
     
-    model_with_temp = ModelWithTemperature(model, device=device)
-    model_with_temp.set_temperature(valid_loader)  # Apply temperature scaling
-    
-    model_with_temp.eval()
-    
-    test_accuracy = validation_accuracy(model_with_temp, test_loader, device, mode=args.type)
+
+    test_accuracy = validation_accuracy(model, test_loader, device, mode=args.type)
     print('Test accuracy:', test_accuracy)
 
     outputs, targets = [], []
     with torch.no_grad():
         for inputs, target in test_loader:
             inputs, target = inputs.to(device), target.to(device)
-            output = rein_forward(model_with_temp, inputs)
+            output = rein_forward(model, inputs)
             outputs.append(output.cpu())
             targets.append(target.cpu())
     

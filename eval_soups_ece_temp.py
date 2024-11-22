@@ -11,13 +11,33 @@ from utils import read_conf, validation_accuracy, ModelWithTemperature, validate
 import dino_variant
 from data import cifar10, cifar100, cub, ham10000, bloodmnist, pathmnist
 import rein
+import torch.nn.functional as F
 
-# Model forward function
+
+
 def rein_forward(model, inputs):
     output = model.forward_features(inputs)[:, 0, :]
     output = model.linear(output)
     output = torch.softmax(output, dim=1)
+
     return output
+
+# Model forward function
+def temp_forward(model, inputs, temp=1.0, post_temp=False):
+    if isinstance(model, ModelWithTemperature):
+        logits = model.model.forward_features(inputs)[:, 0, :]
+        logits = model.model.linear(logits)
+    else:
+        logits = model.forward_features(inputs)[:, 0, :]
+        logits = model.linear(logits)
+
+    if post_temp:
+        if not isinstance(temp, torch.Tensor):
+            temp = torch.tensor(temp, device=logits.device)
+        temp = temp.to(logits.device)  # GPU로 이동
+        logits = logits / temp
+    
+    return logits
 
 # Model initialization
 def initialize_models(save_paths, variant, config, device):
@@ -77,7 +97,7 @@ def greedy_soup_ensemble(models, model_names, valid_loader, device, variant, con
     greedy_soup_params = sorted_models[0][0].state_dict()
     greedy_soup_ingredients = [sorted_models[0][0]]
     
-    TOLERANCE = (sorted_models[-1][1] - sorted_models[0][1]) / 2
+    TOLERANCE = (sorted_models[-1][1] - sorted_models[0][1]) 
     TOLERANCE = 0.1
     print(f'Tolerance: {TOLERANCE}')
 
@@ -101,7 +121,7 @@ def greedy_soup_ensemble(models, model_names, valid_loader, device, variant, con
         with torch.no_grad():
             for inputs, target in valid_loader:
                 inputs, target = inputs.to(device), target.to(device)
-                output = rein_forward(temp_model, inputs)
+                output = rein_forward(model, inputs)
                 outputs.append(output.cpu())
                 targets.append(target.cpu())
         
@@ -112,7 +132,7 @@ def greedy_soup_ensemble(models, model_names, valid_loader, device, variant, con
         print(f'Potential greedy soup ECE: {held_out_val_ece}, best ECE so far: {best_ece}.')
         
         # Add new ingredient to the greedy soup if it improves ECE or is within tolerance
-        if held_out_val_ece < best_ece + TOLERANCE:
+        if held_out_val_ece <= best_ece + TOLERANCE:
             best_ece = held_out_val_ece
             greedy_soup_ingredients.append(sorted_models[i][0])
             greedy_soup_params = potential_greedy_soup_params
@@ -174,21 +194,25 @@ def train():
     # model1.load_state_dict(greedy_soup_params)
     model = get_model_from_sd(greedy_soup_params, variant, config, device)
     
-    model_with_temp = ModelWithTemperature(model, device=device)
-    model_with_temp.set_temperature(valid_loader)  # Apply temperature scaling
+    model_temp = ModelWithTemperature(model)
+    print(model_temp)
+    model_temp.set_temperature(valid_loader)
+    temp = model_temp.get_temperature()
+    print(f"Optimal Temperature: {temp}")
     
     # model.eval()
-    model_with_temp.eval()
+    model_temp.eval()
     
-    test_accuracy = validation_accuracy(model_with_temp, test_loader, device, mode=args.type)
+    test_accuracy = validation_accuracy(model_temp, test_loader, device, mode=args.type)
     print('Test accuracy:', test_accuracy)
 
     outputs, targets = [], []
     with torch.no_grad():
         for inputs, target in test_loader:
             inputs, target = inputs.to(device), target.to(device)
-            output = rein_forward(model_with_temp, inputs)
-            outputs.append(output.cpu())
+            output = temp_forward(model_temp, inputs, temp=temp, post_temp=True)
+            probabilities = F.softmax(output, dim=1) 
+            outputs.append(probabilities.cpu())
             targets.append(target.cpu())
     
     outputs = torch.cat(outputs).numpy()
