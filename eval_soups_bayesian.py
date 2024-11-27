@@ -91,7 +91,6 @@ def evaluate_ensemble(models, weights, valid_loader, device):
     return ece + 0.5 * nll  # Meta loss
 
 
-import numpy as np
 
 def optimize_weights_bayesian_optimization(models, valid_loader, device, pruning_threshold=0.01, n_calls=20):
     def objective(weights):

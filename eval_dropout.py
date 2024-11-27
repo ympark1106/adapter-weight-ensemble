@@ -5,15 +5,20 @@ import os
 import torch
 import torch.nn as nn
 import numpy as np
-from utils import read_conf, evaluate
+from utils import read_conf, evaluate, validation_accuracy
+import matplotlib.pyplot as plt
 
 import argparse
 import rein
 import dino_variant
 from data import cifar10, cifar100, cub, ham10000, bloodmnist, pathmnist
 
-def evaluate_with_mc_dropout(model, loader, device, num_samples=10):
-    model.train()  # Dropout 활성화
+
+def rein_forward_with_mc_dropout(model, loader, device, num_samples=10):
+    """
+    Perform forward pass with MC Dropout and collect predictions.
+    """
+    model.train()  # Ensure dropout is active
     total = 0
     correct = 0
     outputs_all = []
@@ -23,7 +28,6 @@ def evaluate_with_mc_dropout(model, loader, device, num_samples=10):
         inputs, targets = inputs.to(device), targets.to(device)
         batch_outputs = []
 
-        # 여러 번 샘플링하여 Dropout 효과를 적용
         for _ in range(num_samples):
             with torch.no_grad():
                 output = model.forward_features(inputs)[:, 0, :]
@@ -31,28 +35,25 @@ def evaluate_with_mc_dropout(model, loader, device, num_samples=10):
                 output = torch.softmax(output, dim=1)
                 batch_outputs.append(output)
 
-        # 샘플링한 결과의 평균을 최종 예측으로 사용
+        # Averaging predictions over multiple MC samples
         averaged_output = torch.mean(torch.stack(batch_outputs), dim=0)
         _, predicted = averaged_output.max(1)
         
-        # 정확도 계산
         correct += predicted.eq(targets).sum().item()
         total += targets.size(0)
 
-        # 평가 메트릭 계산을 위해 모든 배치 출력과 타겟을 저장
         outputs_all.append(averaged_output.cpu())
         targets_all.append(targets.cpu())
 
-    # 정확도 출력
-    accuracy = correct / total
-    print(f'MC Dropout 평가 정확도: {accuracy:.4f}')
-    
-    # 전체 평가 메트릭 계산
     outputs_all = torch.cat(outputs_all).numpy()
     targets_all = torch.cat(targets_all).numpy()
+
+
+    test_accuracy = validation_accuracy(model, loader, device, mode="rein")
     evaluate(outputs_all, targets_all, verbose=True)
 
-    return accuracy
+    return test_accuracy
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -82,17 +83,16 @@ def main():
     elif args.data == 'pathmnist':
         train_loader, test_loader, valid_loader = pathmnist.get_dataloader(batch_size, download=True, num_workers=4)
         
-    # 모델 초기화
+
     if args.netsize == 's':
         model_load = dino_variant._small_dino
         variant = dino_variant._small_variant
     model = torch.hub.load('facebookresearch/dinov2', model_load)
     dino_state_dict = model.state_dict()
 
-    # MC Dropout을 위한 모델 로드
     model = rein.ReinsDinoVisionTransformer_Dropout(
         **variant,
-        dropout_rate=0.5
+        dropout_rate=0.2
     )
     model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
     model.load_state_dict(dino_state_dict, strict=False)
@@ -100,13 +100,11 @@ def main():
     
     print(model)
 
-    # 체크포인트에서 모델 파라미터 불러오기
     state_dict = torch.load(os.path.join(save_path, 'last.pth.tar'), map_location='cpu')['state_dict']
     model.load_state_dict(state_dict, strict=True)
-    
-    # MC Dropout 평가
-    accuracy = evaluate_with_mc_dropout(model, test_loader, device, args.num_samples)
-    print(f'MC Dropout 평가 최종 정확도: {accuracy:.4f}')
+
+    accuracy = rein_forward_with_mc_dropout(model, test_loader, device, args.num_samples)
+    print(f'MC Dropout 평가 최종 정확도: {accuracy:.6f}')
 
 if __name__ == '__main__':
     main()

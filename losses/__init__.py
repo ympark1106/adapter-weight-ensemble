@@ -10,4 +10,5 @@ from .focal_loss_adaptive_gamma import FocalLossAdaptive
 # from .mdca import MDCA
 
 from .rankmixup import RankMixup_MRL, RankMixup_MNDCG
+from .dece import DECE
 

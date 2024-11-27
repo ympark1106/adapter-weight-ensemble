@@ -17,6 +17,7 @@ class ReinsDinoVisionTransformer_Dropout(DinoVisionTransformer):
             patch_size=kwargs['patch_size'],
         )
         self.dropout = nn.Dropout(dropout_rate)  # Dropout layer 추가
+        self.linear_dropout = nn.Dropout(dropout_rate)  # 추가된 드롭아웃
 
     def forward_features(self, x, masks=None):
         B, _, h, w = x.shape
@@ -27,6 +28,7 @@ class ReinsDinoVisionTransformer_Dropout(DinoVisionTransformer):
             x = blk(x)
             x = self.reins.forward(x, idx, batch_first=True, has_cls_token=True)
             x = self.dropout(x)  # MC Dropout 적용
+            x = self.linear_dropout(x)  # MC Dropout 적용
 
         return x
 
