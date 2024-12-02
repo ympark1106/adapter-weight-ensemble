@@ -159,7 +159,7 @@ def train():
             lr_scheduler_decay.step()
         else:
             # Cyclical LR에서 학습률이 저점(base_lr)에 도달했을 때 가중치 저장
-            if optimizer.param_groups[0]['lr'] == cyclic_scheduler.base_lrs[0]:
+            if optimizer.param_groups[0]['lr'] == 0.000013:
                 print(optimizer.param_groups[0]['lr'])
                 print(cyclic_scheduler.base_lrs[0])
                 torch.save(model.state_dict(), os.path.join(save_path, f'cyclic_checkpoint_epoch{epoch}.pth'))

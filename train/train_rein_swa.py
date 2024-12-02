@@ -112,7 +112,8 @@ def train():
     total_cyclic_epochs = max_epoch - lr_decay_epochs
     print("Total Cyclic Epochs: ", total_cyclic_epochs)
     #T_max = 한 cycle 주기
-    cyclic_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=10, eta_min=1e-5)
+    # cyclic_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=15, eta_min=1e-5)
+    cyclic_scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=30, T_mult=1, eta_min=1e-5)
 
 
 
@@ -163,7 +164,7 @@ def train():
             lr_scheduler_decay.step()
         else:
             # Cyclical LR에서 학습률이 저점(base_lr)에 도달했을 때 가중치 저장
-            if optimizer.param_groups[0]['lr'] == cyclic_scheduler.eta_min:
+            if optimizer.param_groups[0]['lr'] == 0.000013:
                             torch.save(model.state_dict(), os.path.join(save_path, f'cyclic_checkpoint_epoch{epoch}.pth'))
             cyclic_scheduler.step()
             
