@@ -17,23 +17,23 @@ def get_dataloader(batch_size: int = 32, download: bool = True, num_workers: int
     DataClass = getattr(medmnist, info['python_class'])
     
     # Define data transforms for 224x224 resolution, suitable for RGB images
+    # Define data transforms
     train_transforms = transforms.Compose([
-        transforms.Resize((28, 28)),  # Resize images to 224x224
+        transforms.Resize((224, 224)),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5], std=[0.5])  # RGB normalization
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
-    
     test_transforms = transforms.Compose([
-        transforms.Resize((28, 28)),
+        transforms.Resize((224, 224)),
         transforms.ToTensor(),
-        transforms.Normalize(mean=[0.5], std=[0.5])
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
     
     # Load datasets with specified transforms
-    train_dataset = PathMNIST(root='data', split='train', transform=train_transforms, download=download)
-    valid_dataset = PathMNIST(root='data', split='val', transform=test_transforms, download=download)
-    test_dataset = PathMNIST(root='data', split='test', transform=test_transforms, download=download)
+    train_dataset = PathMNIST(root='data', split='train', transform=train_transforms, download=download, size=224)
+    valid_dataset = PathMNIST(root='data', split='val', transform=test_transforms, download=download, size=224)
+    test_dataset = PathMNIST(root='data', split='test', transform=test_transforms, download=download, size=224)
     
     # print(train_dataset)
     # print(valid_dataset)

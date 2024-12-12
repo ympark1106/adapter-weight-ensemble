@@ -2,7 +2,7 @@ name: pathmnist
 
 data_root: /home/youmin/workspace/VFMs-Adapters-Ensemble/pathmnist
 batch_size: 32
-epoch: 170
+epoch: 230
 num_classes: 9
 save_path: ./checkpoints/checkpoints_pathmnist
 

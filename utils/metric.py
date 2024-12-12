@@ -64,6 +64,14 @@ def validation_accuracy(model, loader, device, mode='rein'):
     def resnet(model, inputs):
         outputs = model(inputs)
         return outputs
+    
+    def densenet(model, inputs):
+        outputs = model(inputs)
+        return outputs
+    
+    def vgg(model, inputs):
+        outputs = model(inputs)
+        return outputs
 
     # Select appropriate output function
     if mode == 'rein':
@@ -77,6 +85,10 @@ def validation_accuracy(model, loader, device, mode='rein'):
         model.train()
     elif mode == 'resnet':
         out = resnet
+    elif mode == 'densenet':
+        out = densenet
+    elif mode == 'vgg':
+        out = vgg
     else:
         out = linear
 

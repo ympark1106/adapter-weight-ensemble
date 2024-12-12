@@ -7,6 +7,7 @@ import torch.nn as nn
 import argparse
 import numpy as np
 
+import torch.nn.functional as F
 from utils import read_conf, validation_accuracy, ModelWithTemperature, validate, evaluate, calculate_ece, calculate_nll
 import dino_variant
 from data import cifar10, cifar100, cub, ham10000, bloodmnist, pathmnist
@@ -20,7 +21,6 @@ def rein_forward(model, inputs):
     output = torch.softmax(output, dim=1)
     return output
 
-# Model initialization
 def initialize_models(save_paths, variant, config, device):
     models = []
     for save_path in save_paths:
@@ -33,14 +33,7 @@ def initialize_models(save_paths, variant, config, device):
         models.append(model)
     return models
 
-def get_model_from_sd(state_dict, variant, config, device):
-    model = rein.ReinsDinoVisionTransformer(**variant)
-    model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
-    model.load_state_dict(state_dict, strict=True)
-    model.to(device)
-    
-    return model
-            
+
 # Data loader setup
 def setup_data_loaders(args, data_path, batch_size):
     if args.data == 'cifar10':
@@ -63,68 +56,82 @@ def setup_data_loaders(args, data_path, batch_size):
     
     return test_loader, valid_loader
 
-# Greedy soup model ensembling
-def greedy_soup_ensemble(models, model_names, valid_loader, device, variant, config):
-    # Calculate ECE for each model and sort them by ECE in ascending order (lower ECE is better)
-    ece_list = [validate(model, valid_loader, device) for model in models]
-    model_ece_pairs = [(model, ece, name) for model, ece, name in zip(models, ece_list, model_names)]
-    sorted_models = sorted(model_ece_pairs, key=lambda x: x[1])
+def compute_acc_bin(conf_thresh_lower, conf_thresh_upper, conf, pred, true):
+    true = np.array(true).reshape(-1)
+    pred = np.array(pred).reshape(-1)
+    conf = np.array(conf).reshape(-1)
+
+    filtered_tuples = [x for x in zip(pred, true, conf) if x[2] > conf_thresh_lower and x[2] <= conf_thresh_upper]
+    if len(filtered_tuples) < 1:
+        return 0, 0, 0
+    else:
+        correct = len([x for x in filtered_tuples if x[0] == x[1]])
+        len_bin = len(filtered_tuples)
+        avg_conf = sum([x[2] for x in filtered_tuples]) / len_bin
+        accuracy = float(correct) / len_bin
+        return accuracy, avg_conf, len_bin
+
+def ECE(conf, pred, true, bin_size=0.1):
+    upper_bounds = np.arange(bin_size, 1+bin_size, bin_size)
+    n = len(conf)
+    ece = 0
+    for conf_thresh in upper_bounds:
+        acc, avg_conf, len_bin = compute_acc_bin(conf_thresh-bin_size, conf_thresh, conf, pred, true)
+        ece += np.abs(acc - avg_conf) * len_bin / n
+    return ece
+
+def calculate_nll(outputs, targets):
+    outputs_tensor = torch.tensor(outputs, requires_grad=True)
+    targets_tensor = torch.tensor(targets, dtype=torch.long).view(-1)
+    nll = F.nll_loss(torch.log(outputs_tensor), targets_tensor)
+    return nll.item()
+
+def evaluate_ensemble(outputs, targets, bins=15):
+    probs = np.array(outputs)
+    preds = np.argmax(probs, axis=1)
+    confs = np.max(probs, axis=1)
     
-    print("Sorted models with ECE performance:")
-    for model, ece, name in sorted_models:
-        print(f'Model: {name}, ECE: {ece}')
-
-    best_ece = sorted_models[0][1]
-    greedy_soup_params = sorted_models[0][0].state_dict()
-    greedy_soup_ingredients = [sorted_models[0][0]]
+    ece = ECE(confs, preds, targets, bin_size=1/bins)
+    nll = calculate_nll(probs, targets)
     
-    TOLERANCE = (sorted_models[-1][1] - sorted_models[0][1]) / 2
-    TOLERANCE = 1
-    print(f'Tolerance: {TOLERANCE}')
+    print("=== Evaluation Results ===")
+    print(f"ECE: {ece:.4f}")
+    print(f"NLL: {nll:.4f}")
+    print("==========================")
 
-    for i in range(1, len(models)):
-        new_ingredient_params = sorted_models[i][0].state_dict()
-        num_ingredients = len(greedy_soup_ingredients)
-        print(f'Adding ingredient {i+1} ({sorted_models[i][2]}) to the greedy soup. Num ingredients: {num_ingredients}')
-        
-        # Calculate potential new parameters with the new ingredient
-        potential_greedy_soup_params = {
-            k: greedy_soup_params[k].clone() * (num_ingredients / (num_ingredients + 1)) + 
-               new_ingredient_params[k].clone() * (1. / (num_ingredients + 1))
-            for k in new_ingredient_params
-        }
+def ensemble_evaluate(models, test_loader, device):
+    outputs = []
+    targets = []
+    correct = 0
+    total = 0
 
-        temp_model = get_model_from_sd(greedy_soup_params, variant, config, device)
-        temp_model.eval()
-        
-        # Evaluate the potential greedy soup model
-        outputs, targets = [], []
-        with torch.no_grad():
-            for inputs, target in valid_loader:
-                inputs, target = inputs.to(device), target.to(device)
-                output = rein_forward(temp_model, inputs)
-                outputs.append(output.cpu())
-                targets.append(target.cpu())
-        
-        outputs = torch.cat(outputs).numpy()
-        targets = torch.cat(targets).numpy().astype(int)
-        held_out_val_ece = calculate_ece(outputs, targets)
-        
-        print(f'Potential greedy soup ECE: {held_out_val_ece}, best ECE so far: {best_ece}.')
-        
-        # Add new ingredient to the greedy soup if it improves ECE or is within tolerance
-        if held_out_val_ece < best_ece + TOLERANCE:
-            best_ece = held_out_val_ece
-            greedy_soup_ingredients.append(sorted_models[i][0])
-            greedy_soup_params = potential_greedy_soup_params
-            print(f'<Added new ingredient to soup. Total ingredients: {len(greedy_soup_ingredients)}>\n')
-        else:
-            print(f'<No improvement. Reverting to best-known parameters.>\n')
+    with torch.no_grad():
+        for batch_idx, (inputs, targets) in enumerate(test_loader):
+            inputs, target = inputs.to(device), target.to(device)
+            if targets.ndim > 1 and targets.size(1) > 1:
+                targets = torch.argmax(targets, dim=1)
+            if targets.ndim > 1:
+                targets = targets.view(-1)
+                
+            batch_outputs = []
+            for model in models:
+                output = rein_forward(model, inputs)
+                batch_outputs.append(output)
 
+            ensemble_output = torch.stack(batch_outputs).mean(dim=0)
+            outputs.append(ensemble_output.cpu().numpy())
+            targets.append(target.cpu().numpy())
 
-    final_model = get_model_from_sd(greedy_soup_params, variant, config, device)
-        
-    return greedy_soup_params, final_model
+            _, predicted = torch.max(ensemble_output, dim=1)
+            correct += (predicted == target).sum().item()
+            total += target.size(0)
+
+    accuracy = correct / total * 100
+    print(f"Ensemble Accuracy: {accuracy:.2f}%")
+
+    outputs = np.vstack(outputs)
+    targets = np.concatenate(targets)
+    evaluate_ensemble(outputs, targets)
 
 def train():
     parser = argparse.ArgumentParser()
@@ -147,9 +154,9 @@ def train():
         
         os.path.join(config['save_path'], 'reins_focal_1'),
         os.path.join(config['save_path'], 'reins_focal_2'),
-        # os.path.join(config['save_path'], 'reins_focal_3'),
+        os.path.join(config['save_path'], 'reins_focal_3'),
         os.path.join(config['save_path'], 'reins_focal_4'),
-        os.path.join(config['save_path'], 'reins_focal_5'),
+        # os.path.join(config['save_path'], 'reins_focal_5'),
         # os.path.join(config['save_path'], 'reins_focal_lr_1'),
         # os.path.join(config['save_path'], 'reins_focal_lr_2'),
         # os.path.join(config['save_path'], 'reins_focal_lr_3'),
@@ -168,28 +175,8 @@ def train():
     models = initialize_models(save_paths, variant, config, device)
     test_loader, valid_loader = setup_data_loaders(args, data_path, batch_size)
     
-    # Step 1: Compute greedy soup parameters
-    greedy_soup_params, model = greedy_soup_ensemble(models, model_names, valid_loader, device, variant, config)
-
-    # Evaluate the final model on the test set
-    model = get_model_from_sd(greedy_soup_params, variant, config, device)
-    model.eval()
+    ensemble_evaluate(models, test_loader, device)
     
-
-    test_accuracy = validation_accuracy(model, test_loader, device, mode=args.type)
-    print('Test accuracy:', test_accuracy)
-
-    outputs, targets = [], []
-    with torch.no_grad():
-        for inputs, target in test_loader:
-            inputs, target = inputs.to(device), target.to(device)
-            output = rein_forward(model, inputs)
-            outputs.append(output.cpu())
-            targets.append(target.cpu())
-    
-    outputs = torch.cat(outputs).numpy()
-    targets = torch.cat(targets).numpy().astype(int)
-    evaluate(outputs, targets, verbose=True)
 
 if __name__ == '__main__':
     train()

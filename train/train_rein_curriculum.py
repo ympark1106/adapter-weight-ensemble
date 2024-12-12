@@ -104,53 +104,65 @@ def train():
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay = 1e-5)
     
     
-    # LR decay scheduler (75% 동안)
-    lr_decay_epochs = 70
+    # LR decay scheduler 
+    lr_decay_epochs = 50
     lr_scheduler_decay = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[50, 70], gamma=0.1)
 
-    # Cyclic Cosine Annealing Phase
-    total_cyclic_epochs = max_epoch - lr_decay_epochs
-    print("Total Cyclic Epochs: ", total_cyclic_epochs)
-    #T_max = 한 cycle 주기
-    # cyclic_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=15, eta_min=1e-5)
-    cyclic_scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=30, T_mult=1, eta_min=1e-5)
+    cyclic_start_epoch = 50  
+    cycle_length = 40        # cycle length
+    cyclic_epochs = max_epoch - cyclic_start_epoch  # 싸이클 총 학습 에포크
 
-
-
-    saver = timm.utils.CheckpointSaver(model, optimizer, checkpoint_dir= save_path, max_history = 1) 
+    checkpoint_path = os.path.join(save_path, f'checkpoint_epoch_{cyclic_start_epoch}.pth')  # 특정 에포크 체크포인트 저장 경로
+    cyclic_scheduler = None  # 싸이클 스케줄러를 동적으로 설정
     
-    torch.save(model.state_dict(), os.path.join(save_path, f'cyclic_checkpoint_epoch{max_epoch}.pth'))
+    
+    saver = timm.utils.CheckpointSaver(model, optimizer, checkpoint_dir= save_path, max_history = 1) 
 
-    # f = open(os.path.join(save_path, 'epoch_acc.txt'), 'w')
+    # 특정 에포크 체크포인트 저장
+    if not os.path.exists(checkpoint_path):
+        print(f"Saving checkpoint for epoch {cyclic_start_epoch}")
+        torch.save(model.state_dict(), checkpoint_path)
+
     avg_accuracy = 0.0
     start_time = time.time()
-    
+
+    # Training 루프 수정
     for epoch in range(max_epoch):
+        
+        # 싸이클마다 70번째 에포크 상태로 되돌아감
+        if epoch >= cyclic_start_epoch and (epoch - cyclic_start_epoch) % cycle_length == 0:
+            print(f"\nRestoring model to checkpoint from epoch {cyclic_start_epoch}")
+            model.load_state_dict(torch.load(checkpoint_path))
+            cyclic_scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
+                optimizer, T_0=cycle_length, T_mult=1, eta_min=1e-5
+            )
+
         epoch_start_time = time.time()
-        ## training
+        ## Training
         model.train()
         total_loss = 0
         total = 0
         correct = 0
+
         for batch_idx, (inputs, targets) in enumerate(train_loader):
             targets = targets.type(torch.LongTensor)
-            inputs, targets = inputs.to(device), targets.to(device)           
+            inputs, targets = inputs.to(device), targets.to(device)
             
             if targets.ndim > 1 and targets.size(1) > 1:
                 targets = torch.argmax(targets, dim=1)
-                
             if targets.ndim > 1:
-                targets = targets.view(-1) 
+                targets = targets.view(-1)
             
             optimizer.zero_grad()
-            
+
             features = model.forward_features(inputs)
             features = features[:, 0, :]
             outputs = model.linear(features)
             
             loss = criterion(outputs, targets)
-            loss.backward()            
+            loss.backward()
             optimizer.step()
+
 
             total_loss += loss
             total += targets.size(0)

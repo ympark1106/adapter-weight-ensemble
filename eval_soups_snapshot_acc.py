@@ -108,7 +108,7 @@ def greedy_soup_ensemble(models, model_names, valid_loader, device, variant, con
         }
         
         # Load the new potential parameters into the base model for evaluation
-        temp_model = get_model_from_sd(greedy_soup_params, variant, config, device)
+        temp_model = get_model_from_sd(potential_greedy_soup_params, variant, config, device)
         temp_model.eval()
         
         # Calculate validation accuracy with the potential new soup parameters
@@ -161,17 +161,23 @@ def train():
     batch_size = int(config['batch_size'])
     
     save_paths = [
-        # os.path.join(config['save_path'], 'reins_focal_swa/cyclic_checkpoint_epoch76.pth'),
-        # os.path.join(config['save_path'], 'reins_focal_swa/cyclic_checkpoint_epoch82.pth'),
-        # os.path.join(config['save_path'], 'reins_focal_swa/cyclic_checkpoint_epoch88.pth'),
-        # os.path.join(config['save_path'], 'reins_focal_swa/cyclic_checkpoint_epoch94.pth'),
+
+        # os.path.join(config['save_path'], 'reins_focal_hydra/cyclic_checkpoint_epoch99.pth'),
+        # os.path.join(config['save_path'], 'reins_focal_hydra/cyclic_checkpoint_epoch129.pth'),
+        # os.path.join(config['save_path'], 'reins_focal_hydra/cyclic_checkpoint_epoch159.pth'),
+        # os.path.join(config['save_path'], 'reins_focal_hydra/cyclic_checkpoint_epoch189.pth'),
+        # os.path.join(config['save_path'], 'reins_focal_hydra/cyclic_checkpoint_epoch219.pth'),
         
-        os.path.join(config['save_path'], 'reins_focal_swa/cyclic_checkpoint_epoch80.pth'),
-        os.path.join(config['save_path'], 'reins_focal_swa/cyclic_checkpoint_epoch100.pth'),
-        os.path.join(config['save_path'], 'reins_focal_swa/cyclic_checkpoint_epoch120.pth'),
-        os.path.join(config['save_path'], 'reins_focal_swa/cyclic_checkpoint_epoch140.pth'),
-        os.path.join(config['save_path'], 'reins_focal_swa/cyclic_checkpoint_epoch160.pth'),
-        # os.path.join(config['save_path'], 'reins_focal_swa/last.pth.tar'),
+        os.path.join(config['save_path'], 'reins_focal_hydra_1/cyclic_checkpoint_epoch99.pth'),
+        os.path.join(config['save_path'], 'reins_focal_hydra_1/cyclic_checkpoint_epoch129.pth'),
+        os.path.join(config['save_path'], 'reins_focal_hydra_1/cyclic_checkpoint_epoch159.pth'),
+        os.path.join(config['save_path'], 'reins_focal_hydra_1/cyclic_checkpoint_epoch189.pth'),
+        os.path.join(config['save_path'], 'reins_focal_hydra_1/cyclic_checkpoint_epoch219.pth'),
+    
+        # os.path.join(config['save_path'], 'reins_focal_hydra_2/cyclic_checkpoint_epoch89.pth'),
+        # os.path.join(config['save_path'], 'reins_focal_hydra_2/cyclic_checkpoint_epoch129.pth'),
+        # os.path.join(config['save_path'], 'reins_focal_hydra_2/cyclic_checkpoint_epoch169.pth'),
+        # os.path.join(config['save_path'], 'reins_focal_hydra_2/cyclic_checkpoint_epoch209.pth'),
     ]
     
     model_names = [os.path.basename(path) for path in save_paths]

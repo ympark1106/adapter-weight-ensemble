@@ -1,17 +1,19 @@
 import warnings
 warnings.filterwarnings("ignore", message="xFormers is not available")
-
+import sys
+sys.path.append("/home/youmin/workspace/VFMs-Adapters-Ensemble/adapter_ensemble")
 import os
 import torch
 import torch.nn as nn
 import argparse
 import numpy as np
 
-from utils import read_conf, validation_accuracy, ModelWithTemperature, validate, evaluate, calculate_ece, calculate_nll
+from utils import read_conf, validation_accuracy, ModelWithTemperature, validate, evaluate, calculate_ece, calculate_nll, state_dict_to_vector, vector_to_state_dict, add_ptm_to_tv, check_parameterNamesMatch, check_state_dicts_equal, ties_merging
 import dino_variant
 from data import cifar10, cifar100, cub, ham10000, bloodmnist, pathmnist
 import rein
 from losses import DECE
+
 
 # Model forward function
 def rein_forward(model, inputs):
@@ -63,68 +65,38 @@ def setup_data_loaders(args, data_path, batch_size):
     
     return test_loader, valid_loader
 
-# Greedy soup model ensembling
-def greedy_soup_ensemble(models, model_names, valid_loader, device, variant, config):
-    # Calculate ECE for each model and sort them by ECE in ascending order (lower ECE is better)
-    ece_list = [validate(model, valid_loader, device) for model in models]
-    model_ece_pairs = [(model, ece, name) for model, ece, name in zip(models, ece_list, model_names)]
-    sorted_models = sorted(model_ece_pairs, key=lambda x: x[1])
+
+def ties_merge_ensemble(models, variant, config, device, K=20, merge_func="dis-mean", lamda=1):
+    # 1. 모든 모델의 state_dict를 벡터화
+    state_dicts = [model.state_dict() for model in models]
+    flat_state_dicts = [state_dict_to_vector(sd) for sd in state_dicts]
     
-    print("Sorted models with ECE performance:")
-    for model, ece, name in sorted_models:
-        print(f'Model: {name}, ECE: {ece}')
-
-    best_ece = sorted_models[0][1]
-    greedy_soup_params = sorted_models[0][0].state_dict()
-    greedy_soup_ingredients = [sorted_models[0][0]]
+    # 2. PTM(기본 모델) 생성 및 벡터화
+    ptm_model = rein.ReinsDinoVisionTransformer(**variant)
+    ptm_model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
+    ptm_model.to(device)
+    ptm_state_dict = ptm_model.state_dict()
+    flat_ptm = state_dict_to_vector(ptm_state_dict)
     
-    TOLERANCE = (sorted_models[-1][1] - sorted_models[0][1]) / 2
-    TOLERANCE = 1
-    print(f'Tolerance: {TOLERANCE}')
-
-    for i in range(1, len(models)):
-        new_ingredient_params = sorted_models[i][0].state_dict()
-        num_ingredients = len(greedy_soup_ingredients)
-        print(f'Adding ingredient {i+1} ({sorted_models[i][2]}) to the greedy soup. Num ingredients: {num_ingredients}')
-        
-        # Calculate potential new parameters with the new ingredient
-        potential_greedy_soup_params = {
-            k: greedy_soup_params[k].clone() * (num_ingredients / (num_ingredients + 1)) + 
-               new_ingredient_params[k].clone() * (1. / (num_ingredients + 1))
-            for k in new_ingredient_params
-        }
-
-        temp_model = get_model_from_sd(potential_greedy_soup_params, variant, config, device)
-        temp_model.eval()
-        
-        # Evaluate the potential greedy soup model
-        outputs, targets = [], []
-        with torch.no_grad():
-            for inputs, target in valid_loader:
-                inputs, target = inputs.to(device), target.to(device)
-                output = rein_forward(temp_model, inputs)
-                outputs.append(output.cpu())
-                targets.append(target.cpu())
-        
-        outputs = torch.cat(outputs).numpy()
-        targets = torch.cat(targets).numpy().astype(int)
-        held_out_val_ece = calculate_ece(outputs, targets)
-        
-        print(f'Potential greedy soup ECE: {held_out_val_ece}, best ECE so far: {best_ece}.')
-        
-        # Add new ingredient to the greedy soup if it improves ECE or is within tolerance
-        if held_out_val_ece < best_ece + TOLERANCE:
-            best_ece = held_out_val_ece
-            greedy_soup_ingredients.append(sorted_models[i][0])
-            greedy_soup_params = potential_greedy_soup_params
-            print(f'<Added new ingredient to soup. Total ingredients: {len(greedy_soup_ingredients)}>\n')
-        else:
-            print(f'<No improvement. Reverting to best-known parameters.>\n')
-
-
-    final_model = get_model_from_sd(greedy_soup_params, variant, config, device)
-        
-    return greedy_soup_params, final_model
+    # 3. 작업 벡터 계산
+    task_vectors = [flat - flat_ptm for flat in flat_state_dicts]
+    task_vectors = torch.stack(task_vectors)
+    
+    # 4. TIES-MERGING 병합
+    merged_vector = ties_merging(
+        flat_task_checks=task_vectors,
+        reset_thresh=K,
+        merge_func=merge_func
+    )
+    
+    # 5. 병합된 모델 생성
+    merged_state_dict = vector_to_state_dict(flat_ptm + lamda * merged_vector, ptm_state_dict)
+    merged_model = rein.ReinsDinoVisionTransformer(**variant)
+    merged_model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
+    merged_model.load_state_dict(merged_state_dict)
+    merged_model.to(device)
+    
+    return merged_model
 
 def train():
     parser = argparse.ArgumentParser()
@@ -140,11 +112,11 @@ def train():
     batch_size = int(config['batch_size'])
     
     save_paths = [
-        # os.path.join(config['save_path'], 'reins_focal_hydra/cyclic_checkpoint_epoch89.pth'),
-        # os.path.join(config['save_path'], 'reins_focal_hydra/cyclic_checkpoint_epoch119.pth'),
-        # os.path.join(config['save_path'], 'reins_focal_hydra/cyclic_checkpoint_epoch149.pth'),
-        # os.path.join(config['save_path'], 'reins_focal_hydra/cyclic_checkpoint_epoch179.pth'),
-        # os.path.join(config['save_path'], 'reins_focal_hydra/cyclic_checkpoint_epoch209.pth'),
+        # os.path.join(config['save_path'], 'reins_focal_swa/cyclic_checkpoint_epoch99.pth'),
+        # os.path.join(config['save_path'], 'reins_focal_swa/cyclic_checkpoint_epoch129.pth'),
+        # os.path.join(config['save_path'], 'reins_focal_swa/cyclic_checkpoint_epoch159.pth'),
+        # os.path.join(config['save_path'], 'reins_focal_swa/cyclic_checkpoint_epoch189.pth'),
+        # os.path.join(config['save_path'], 'reins_focal_swa/cyclic_checkpoint_epoch219.pth'),
         
 
         # os.path.join(config['save_path'], 'reins_focal_hydra/cyclic_checkpoint_epoch99.pth'),
@@ -159,17 +131,16 @@ def train():
         # os.path.join(config['save_path'], 'reins_focal_hydra_1/cyclic_checkpoint_epoch189.pth'),
         # os.path.join(config['save_path'], 'reins_focal_hydra_1/cyclic_checkpoint_epoch219.pth'),
         
-        # os.path.join(config['save_path'], 'reins_focal_hydra_1/cyclic_checkpoint_epoch89.pth'),
-        # os.path.join(config['save_path'], 'reins_focal_hydra_1/cyclic_checkpoint_epoch129.pth'),
-        # os.path.join(config['save_path'], 'reins_focal_hydra_1/cyclic_checkpoint_epoch169.pth'),
-        # os.path.join(config['save_path'], 'reins_focal_hydra_1/cyclic_checkpoint_epoch209.pth'),
-        # os.path.join(config['save_path'], 'reins_focal_hydra_1/cyclic_checkpoint_epoch249.pth'),
-    
-        os.path.join(config['save_path'], 'reins_focal_hydra_2/cyclic_checkpoint_epoch89.pth'),
-        os.path.join(config['save_path'], 'reins_focal_hydra_2/cyclic_checkpoint_epoch129.pth'),
-        os.path.join(config['save_path'], 'reins_focal_hydra_2/cyclic_checkpoint_epoch169.pth'),
-        os.path.join(config['save_path'], 'reins_focal_hydra_2/cyclic_checkpoint_epoch209.pth'),
+        os.path.join(config['save_path'], 'reins_focal_hydra_1/cyclic_checkpoint_epoch89.pth'),
+        os.path.join(config['save_path'], 'reins_focal_hydra_1/cyclic_checkpoint_epoch129.pth'),
+        os.path.join(config['save_path'], 'reins_focal_hydra_1/cyclic_checkpoint_epoch169.pth'),
+        os.path.join(config['save_path'], 'reins_focal_hydra_1/cyclic_checkpoint_epoch209.pth'),
         os.path.join(config['save_path'], 'reins_focal_hydra_1/cyclic_checkpoint_epoch249.pth'),
+    
+        # os.path.join(config['save_path'], 'reins_focal_hydra_2/cyclic_checkpoint_epoch89.pth'),
+        # os.path.join(config['save_path'], 'reins_focal_hydra_2/cyclic_checkpoint_epoch129.pth'),
+        # os.path.join(config['save_path'], 'reins_focal_hydra_2/cyclic_checkpoint_epoch169.pth'),
+        # os.path.join(config['save_path'], 'reins_focal_hydra_2/cyclic_checkpoint_epoch209.pth'),
         
         
         # os.path.join(config['save_path'], 'reins_focal_hydra_3/cyclic_checkpoint_epoch99.pth'),
@@ -190,20 +161,27 @@ def train():
     models = initialize_models(save_paths, variant, config, device)
     test_loader, valid_loader = setup_data_loaders(args, data_path, batch_size)
     
-    greedy_soup_params, model = greedy_soup_ensemble(models, model_names, valid_loader, device, variant, config)
+    merged_model = ties_merge_ensemble(
+                                        models=models,
+                                        variant=variant,
+                                        config=config,
+                                        device=device,
+                                        K=99,  # 상위 20% 매개변수만 유지
+                                        merge_func="dis-weighted-mean",  # 평균 병합
+                                        lamda=1  # 스케일링 파라미터
+                                    )
 
-    model = get_model_from_sd(greedy_soup_params, variant, config, device)
-    model.eval()
+    merged_model.eval()
     
 
-    test_accuracy = validation_accuracy(model, test_loader, device, mode=args.type)
+    test_accuracy = validation_accuracy(merged_model, test_loader, device, mode=args.type)
     print('Test accuracy:', test_accuracy)
 
     outputs, targets = [], []
     with torch.no_grad():
         for inputs, target in test_loader:
             inputs, target = inputs.to(device), target.to(device)
-            output = rein_forward(model, inputs)
+            output = rein_forward(merged_model, inputs)
             outputs.append(output.cpu())
             targets.append(target.cpu())
     

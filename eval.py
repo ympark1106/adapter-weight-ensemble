@@ -45,11 +45,16 @@ def rein_forward_mc_dropout(model, inputs, num_samples=10):
     # print(f"MC Dropout 평균화 후 output shape: {output.shape}")
     return output
 
+def resnet_forward(model, inputs):
+    output = model(inputs)
+    output = torch.softmax(output, dim=1)
+    return output
+
 
 
 def train():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data', '-d', type=str, default='cub')
+    parser.add_argument('--data', '-d', type=str, default='cifar10')
     parser.add_argument('--gpu', '-g', default = '0', type=str)
     parser.add_argument('--netsize', default='s', type=str)
     parser.add_argument('--save_path', '-s', type=str)
@@ -104,9 +109,9 @@ def train():
     model.load_state_dict(dino_state_dict, strict=False)
     model.to(device)
 
-    state_dict = torch.load(os.path.join(save_path, 'last.pth.tar'), map_location='cpu')['state_dict']
-    # state_dict = torch.load(os.path.join(save_path, 'cyclic_checkpoint_epoch100.pth'), map_location='cpu')
-    # state_dict = torch.load(os.path.join(save_path, 'model_best.pth.tar'), map_location='cpu')['state_dict']
+    # state_dict = torch.load(os.path.join(save_path, 'last.pth.tar'), map_location='cpu')['state_dict']
+    state_dict = torch.load(os.path.join(save_path, 'cyclic_checkpoint_epoch149.pth'), map_location='cpu')
+    # state_dict = torch.load(os.path.join(save_path, 'checkpoint_epoch_70.pth'), map_location='cpu')
     model.load_state_dict(state_dict, strict=True)
     
     if args.type == 'rein_dropout':
@@ -132,6 +137,9 @@ def train():
             elif args.type == 'rein_dropout':
                 output = rein_forward_mc_dropout(model, inputs, num_samples=10)
                 # print(output.shape)
+            elif args.type == 'resnet':
+                output = resnet_forward(model, inputs)
+                # print(output.shape
                 
             outputs.append(output.cpu())
             targets.append(target.cpu())

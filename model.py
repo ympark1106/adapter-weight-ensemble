@@ -17,14 +17,14 @@ variant = dino_variant._small_variant
 model = torch.hub.load('facebookresearch/dinov2', model_load)
 dino_state_dict = model.state_dict()
 
-# model = rein.ReinsDinoVisionTransformer(
-#     **dino_variant._small_variant
-# )
-
-model = rein.ReinsDinoVisionTransformer_Dropout(
-    **dino_variant._small_variant,
-    dropout_rate=0.5
+model = rein.ReinsDinoVisionTransformer(
+    **dino_variant._small_variant
 )
+
+# model = rein.ReinsDinoVisionTransformer_Dropout(
+#     **dino_variant._small_variant,
+#     dropout_rate=0.5
+# )
 
 set_requires_grad(model, ["reins", "linear"])
 

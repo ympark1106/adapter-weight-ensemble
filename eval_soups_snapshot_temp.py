@@ -11,14 +11,34 @@ from utils import read_conf, validation_accuracy, ModelWithTemperature, validate
 import dino_variant
 from data import cifar10, cifar100, cub, ham10000, bloodmnist, pathmnist
 import rein
-from losses import DECE
+import torch.nn.functional as F
 
-# Model forward function
+
+
 def rein_forward(model, inputs):
     output = model.forward_features(inputs)[:, 0, :]
     output = model.linear(output)
     output = torch.softmax(output, dim=1)
+
     return output
+
+# Model forward function
+def temp_forward(model, inputs, temp=1.0, post_temp=False):
+    if isinstance(model, ModelWithTemperature):
+        logits = model.model.forward_features(inputs)[:, 0, :]
+        logits = model.model.linear(logits)
+    else:
+        logits = model.forward_features(inputs)[:, 0, :]
+        logits = model.linear(logits)
+
+    if post_temp:
+        if not isinstance(temp, torch.Tensor):
+            temp = torch.tensor(temp, device=logits.device)
+        temp = temp.to(logits.device)  # GPU로 이동
+        logits = logits / temp
+    
+    return logits
+
 
 # Model initialization
 def initialize_models(save_paths, variant, config, device):
@@ -26,7 +46,7 @@ def initialize_models(save_paths, variant, config, device):
     for save_path in save_paths:
         model = rein.ReinsDinoVisionTransformer(**variant)
         model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
-        state_dict = torch.load(os.path.join(save_path, 'last.pth.tar'), map_location='cpu')['state_dict']
+        state_dict = torch.load(save_path, map_location='cpu')
         model.load_state_dict(state_dict, strict=False)
         model.to(device)
         model.eval()
@@ -94,7 +114,7 @@ def greedy_soup_ensemble(models, model_names, valid_loader, device, variant, con
             for k in new_ingredient_params
         }
 
-        temp_model = get_model_from_sd(greedy_soup_params, variant, config, device)
+        temp_model = get_model_from_sd(potential_greedy_soup_params, variant, config, device)
         temp_model.eval()
         
         # Evaluate the potential greedy soup model
@@ -140,26 +160,23 @@ def train():
     batch_size = int(config['batch_size'])
     
     save_paths = [
-        # os.path.join(config['save_path'], 'reins_ce1'),
-        # os.path.join(config['save_path'], 'reins_ce2'),
-        # os.path.join(config['save_path'], 'reins_ce3'),
-        # os.path.join(config['save_path'], 'reins_ce4'),
+
+        os.path.join(config['save_path'], 'reins_focal_hydra/cyclic_checkpoint_epoch99.pth'),
+        os.path.join(config['save_path'], 'reins_focal_hydra/cyclic_checkpoint_epoch129.pth'),
+        os.path.join(config['save_path'], 'reins_focal_hydra/cyclic_checkpoint_epoch159.pth'),
+        os.path.join(config['save_path'], 'reins_focal_hydra/cyclic_checkpoint_epoch189.pth'),
+        os.path.join(config['save_path'], 'reins_focal_hydra/cyclic_checkpoint_epoch219.pth'),
         
-        os.path.join(config['save_path'], 'reins_focal_1'),
-        os.path.join(config['save_path'], 'reins_focal_2'),
-        # os.path.join(config['save_path'], 'reins_focal_3'),
-        os.path.join(config['save_path'], 'reins_focal_4'),
-        os.path.join(config['save_path'], 'reins_focal_5'),
-        # os.path.join(config['save_path'], 'reins_focal_lr_1'),
-        # os.path.join(config['save_path'], 'reins_focal_lr_2'),
-        # os.path.join(config['save_path'], 'reins_focal_lr_3'),
-        # os.path.join(config['save_path'], 'reins_focal_lr_4'),
-        # os.path.join(config['save_path'], 'reins_focal_lr_5'),
-        
-        # os.path.join(config['save_path'], 'reins_adafocal1'),
-        # os.path.join(config['save_path'], 'reins_adafocal2'),
-        # os.path.join(config['save_path'], 'reins_adafocal3'),
-        # os.path.join(config['save_path'], 'reins_adafocal4'),
+        # os.path.join(config['save_path'], 'reins_focal_hydra_1/cyclic_checkpoint_epoch99.pth'),
+        # os.path.join(config['save_path'], 'reins_focal_hydra_1/cyclic_checkpoint_epoch129.pth'),
+        # os.path.join(config['save_path'], 'reins_focal_hydra_1/cyclic_checkpoint_epoch159.pth'),
+        # os.path.join(config['save_path'], 'reins_focal_hydra_1/cyclic_checkpoint_epoch189.pth'),
+        # os.path.join(config['save_path'], 'reins_focal_hydra_1/cyclic_checkpoint_epoch219.pth'),
+    
+        # os.path.join(config['save_path'], 'reins_focal_hydra_2/cyclic_checkpoint_epoch89.pth'),
+        # os.path.join(config['save_path'], 'reins_focal_hydra_2/cyclic_checkpoint_epoch129.pth'),
+        # os.path.join(config['save_path'], 'reins_focal_hydra_2/cyclic_checkpoint_epoch169.pth'),
+        # os.path.join(config['save_path'], 'reins_focal_hydra_2/cyclic_checkpoint_epoch209.pth'),
     ]
     
     model_names = [os.path.basename(path) for path in save_paths]
@@ -168,12 +185,18 @@ def train():
     models = initialize_models(save_paths, variant, config, device)
     test_loader, valid_loader = setup_data_loaders(args, data_path, batch_size)
     
-    # Step 1: Compute greedy soup parameters
     greedy_soup_params, model = greedy_soup_ensemble(models, model_names, valid_loader, device, variant, config)
 
-    # Evaluate the final model on the test set
     model = get_model_from_sd(greedy_soup_params, variant, config, device)
-    model.eval()
+    
+    model_temp = ModelWithTemperature(model)
+    print(model_temp)
+    model_temp.set_temperature(valid_loader, cross_validate='ece')
+    temp = model_temp.get_temperature()
+    print(f"Optimal Temperature: {temp}")
+    
+    # model.eval()
+    model_temp.eval()
     
 
     test_accuracy = validation_accuracy(model, test_loader, device, mode=args.type)
