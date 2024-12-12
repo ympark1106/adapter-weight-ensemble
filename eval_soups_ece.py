@@ -147,7 +147,7 @@ def train():
         
         os.path.join(config['save_path'], 'reins_focal_1'),
         os.path.join(config['save_path'], 'reins_focal_2'),
-        # os.path.join(config['save_path'], 'reins_focal_3'),
+        os.path.join(config['save_path'], 'reins_focal_3'),
         os.path.join(config['save_path'], 'reins_focal_4'),
         os.path.join(config['save_path'], 'reins_focal_5'),
         # os.path.join(config['save_path'], 'reins_focal_lr_1'),

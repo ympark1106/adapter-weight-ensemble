@@ -12,8 +12,9 @@ import torch.nn as nn
 import argparse
 import timm
 import numpy as np
-from utils import read_conf, validation_accuracy, evaluate
-
+from utils import read_conf, validation_accuracy, evaluate, validation_accuracy_lora    
+from torch.cuda.amp.autocast_mode import autocast
+from torch.cuda.amp.grad_scaler import GradScaler
 import random
 import rein
 
@@ -92,25 +93,37 @@ def train():
         variant = dino_variant._small_variant
 
 
-    model = torch.hub.load('facebookresearch/dinov2', model_load)
-    dino_state_dict = model.state_dict()
+    dino = torch.hub.load('facebookresearch/dinov2', model_load)
+    dino_state_dict = dino.state_dict()
 
     if args.type == 'rein':
         model = rein.ReinsDinoVisionTransformer(
             **variant
         )
+        model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
+        model.load_state_dict(dino_state_dict, strict=False)
+        model.to(device)
     elif args.type == 'rein_dropout':
         model = rein.ReinsDinoVisionTransformer_Dropout(
             **variant,
             dropout_rate=0.5
         )
+        model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
+        model.load_state_dict(dino_state_dict, strict=False)
+        model.to(device)
+    elif args.type == 'lora':
+        new_state_dict = dict()
+        for k in dino_state_dict.keys():
+            new_k = k.replace("attn.qkv", "attn.qkv.qkv")
+            new_state_dict[new_k] = dino_state_dict[k]
+        model = rein.LoRADinoVisionTransformer(dino)
+        model.dino.load_state_dict(new_state_dict, strict=False)
+        model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
+        model.to(device)
 
-    model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
-    model.load_state_dict(dino_state_dict, strict=False)
-    model.to(device)
 
-    # state_dict = torch.load(os.path.join(save_path, 'last.pth.tar'), map_location='cpu')['state_dict']
-    state_dict = torch.load(os.path.join(save_path, 'cyclic_checkpoint_epoch149.pth'), map_location='cpu')
+    state_dict = torch.load(os.path.join(save_path, 'last.pth.tar'), map_location='cpu')['state_dict']
+    # state_dict = torch.load(os.path.join(save_path, 'cyclic_checkpoint_epoch149.pth'), map_location='cpu')
     # state_dict = torch.load(os.path.join(save_path, 'checkpoint_epoch_70.pth'), map_location='cpu')
     model.load_state_dict(state_dict, strict=True)
     
@@ -121,8 +134,11 @@ def train():
             
     # print(model)
 
-    ## validation
-    test_accuracy = validation_accuracy(model, test_loader, device, mode=args.type)
+    ## validation if lora activate validation_accuracy_lora 
+    if args.type == 'lora':
+        test_accuracy = validation_accuracy_lora(model, test_loader, device)
+    else:
+        test_accuracy = validation_accuracy(model, test_loader, device, mode=args.type)
     print('test acc:', test_accuracy)
 
     outputs = []
@@ -133,13 +149,18 @@ def train():
             inputs, target = inputs.to(device), target.to(device)
             if args.type == 'rein':
                 output = rein_forward(model, inputs)
-                # print(output.shape)  
+                print(output.shape)  
             elif args.type == 'rein_dropout':
                 output = rein_forward_mc_dropout(model, inputs, num_samples=10)
                 # print(output.shape)
             elif args.type == 'resnet':
                 output = resnet_forward(model, inputs)
-                # print(output.shape
+            elif args.type == 'lora':
+                with autocast(enabled=True):
+                    features = model.forward_features(inputs)
+                    output = model.linear(features)
+                    output = torch.softmax(output, dim=1)
+                    print(output.shape)
                 
             outputs.append(output.cpu())
             targets.append(target.cpu())

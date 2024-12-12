@@ -5,6 +5,24 @@ import torch.nn.functional as F
 from utils.temperature_scaling_manual import ModelWithTemperature
 
 
+def validation_accuracy_lora(model, loader, device):
+    total = 0
+    correct = 0
+    
+    model.eval()
+    with torch.no_grad():
+        for batch_idx, (inputs, targets) in enumerate(loader):
+            inputs, targets = inputs.to(device), targets.to(device)
+            outputs = model.forward_features(inputs)
+            outputs = model.linear(outputs)
+            #print(outputs.shape)
+            total += targets.size(0)
+            _, predicted = outputs.max(1)  
+            correct += predicted.eq(targets).sum().item()
+    valid_accuracy = correct/total
+    return valid_accuracy
+
+
 def validation_accuracy(model, loader, device, mode='rein'):
     total = 0
     correct = 0

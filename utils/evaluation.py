@@ -159,7 +159,7 @@ def evaluate(probs, y_true, verbose = False, normalize = False, bins = 15, is_sp
     # print(confs.shape, preds)
     ece = ECE(confs, preds, y_true, bin_size = 1/bins)
     # Calculate MCE
-    mce = MCE(confs, preds, y_true, bin_size = 1/bins)
+    # mce = MCE(confs, preds, y_true, bin_size = 1/bins)
 
     oe = OE(confs, preds, y_true, bin_size = 1/bins)
     if is_spline:
@@ -178,7 +178,7 @@ def evaluate(probs, y_true, verbose = False, normalize = False, bins = 15, is_sp
         # print("Accuracy:", accuracy)
         # print("Error:", error)
         print("ECE:", ece)
-        print("MCE:", mce)
+        # print("MCE:", mce)
         print("OE:", oe)
         print("Loss:", loss)
         # print("brier:", brier)

@@ -80,11 +80,37 @@ def ECE(conf, pred, true, bin_size=0.1):
         ece += np.abs(acc - avg_conf) * len_bin / n
     return ece
 
-def calculate_nll(outputs, targets):
-    outputs_tensor = torch.tensor(outputs, requires_grad=True)
-    targets_tensor = torch.tensor(targets, dtype=torch.long).view(-1)
-    nll = F.nll_loss(torch.log(outputs_tensor), targets_tensor)
-    return nll.item()
+def OE(conf, pred, true, bin_size = 0.1):
+    
+    """
+    Expected Calibration Error
+    
+    Args:
+        conf (numpy.ndarray): list of confidences
+        pred (numpy.ndarray): list of predictions
+        true (numpy.ndarray): list of true labels
+        bin_size: (float): size of one bin (0,1)  # TODO should convert to number of bins?
+        
+    Returns:
+        ece: expected calibration error
+    """
+    true = np.array(true).reshape(-1)  
+    pred = np.array(pred).reshape(-1)
+    conf = np.array(conf).reshape(-1)
+
+    upper_bounds = np.arange(bin_size, 1+bin_size, bin_size)  # Get bounds of bins
+    
+    n = len(conf)
+    ece = 0  # Starting error
+    
+    for conf_thresh in upper_bounds:  # Go through bounds and find accuracies and confidences
+        acc, avg_conf, len_bin = compute_acc_bin(conf_thresh-bin_size, conf_thresh, conf, pred, true)  
+        # print(acc, avg_conf, len_bin)
+        if avg_conf > acc:
+            ece += avg_conf * (avg_conf - acc) * len_bin / n 
+        
+    return ece
+
 
 def evaluate_ensemble(outputs, targets, bins=15):
     probs = np.array(outputs)
@@ -92,11 +118,12 @@ def evaluate_ensemble(outputs, targets, bins=15):
     confs = np.max(probs, axis=1)
     
     ece = ECE(confs, preds, targets, bin_size=1/bins)
-    nll = calculate_nll(probs, targets)
+    oe = OE(confs, preds, targets, bin_size = 1/bins)
+    
     
     print("=== Evaluation Results ===")
     print(f"ECE: {ece:.4f}")
-    print(f"NLL: {nll:.4f}")
+    print(f"OE: {oe:.4f}")
     print("==========================")
 
 def ensemble_evaluate(models, test_loader, device):
@@ -106,12 +133,12 @@ def ensemble_evaluate(models, test_loader, device):
     total = 0
 
     with torch.no_grad():
-        for batch_idx, (inputs, targets) in enumerate(test_loader):
+        for inputs, target in test_loader:
             inputs, target = inputs.to(device), target.to(device)
-            if targets.ndim > 1 and targets.size(1) > 1:
-                targets = torch.argmax(targets, dim=1)
-            if targets.ndim > 1:
-                targets = targets.view(-1)
+            # if targets.ndim > 1 and targets.size(1) > 1:
+            #     targets = torch.argmax(targets, dim=1)
+            # if targets.ndim > 1:
+            #     targets = targets.view(-1)
                 
             batch_outputs = []
             for model in models:
@@ -156,7 +183,7 @@ def train():
         os.path.join(config['save_path'], 'reins_focal_2'),
         os.path.join(config['save_path'], 'reins_focal_3'),
         os.path.join(config['save_path'], 'reins_focal_4'),
-        # os.path.join(config['save_path'], 'reins_focal_5'),
+        os.path.join(config['save_path'], 'reins_focal_5'),
         # os.path.join(config['save_path'], 'reins_focal_lr_1'),
         # os.path.join(config['save_path'], 'reins_focal_lr_2'),
         # os.path.join(config['save_path'], 'reins_focal_lr_3'),
