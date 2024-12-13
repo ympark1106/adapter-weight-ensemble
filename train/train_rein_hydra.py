@@ -105,12 +105,13 @@ def train():
     
     
     # LR decay scheduler 
-    lr_decay_epochs =60
+    lr_decay_epochs = 50
     lr_scheduler_decay = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[40, 60], gamma=0.1)
 
-    cyclic_start_epoch = 60  
-    cycle_length = 30        # cycle length
+    cyclic_start_epoch = 50  
+    cycle_length = 40        # cycle length
     cyclic_epochs = max_epoch - cyclic_start_epoch  # 싸이클 총 학습 에포크
+    print(f"Total cyclic epochs: {cyclic_epochs}")
 
     checkpoint_path = os.path.join(save_path, f'checkpoint_epoch_{cyclic_start_epoch}.pth')  # 특정 에포크 체크포인트 저장 경로
     cyclic_scheduler = None  # 싸이클 스케줄러를 동적으로 설정

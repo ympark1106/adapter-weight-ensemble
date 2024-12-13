@@ -14,7 +14,7 @@ import timm
 import numpy as np
 from utils import read_conf, validation_accuracy, evaluate, validation_accuracy_lora    
 from torch.cuda.amp.autocast_mode import autocast
-from torch.cuda.amp.grad_scaler import GradScaler
+
 import random
 import rein
 
@@ -26,8 +26,15 @@ def rein_forward(model, inputs):
     output = model.forward_features(inputs)[:, 0, :]
     output = model.linear(output)
     output = torch.softmax(output, dim=1)
-
     return output
+
+def lora_forward(model, inputs):
+    with autocast(enabled=True):
+        features = model.forward_features(inputs)
+        output = model.linear(features)
+        output = torch.softmax(output, dim=1)
+    return output
+
 
 def rein_forward_mc_dropout(model, inputs, num_samples=10):
     outputs = []
@@ -45,6 +52,7 @@ def rein_forward_mc_dropout(model, inputs, num_samples=10):
     output = torch.mean(torch.stack(outputs), dim=0)
     # print(f"MC Dropout 평균화 후 output shape: {output.shape}")
     return output
+
 
 def resnet_forward(model, inputs):
     output = model(inputs)
@@ -123,7 +131,7 @@ def train():
 
 
     state_dict = torch.load(os.path.join(save_path, 'last.pth.tar'), map_location='cpu')['state_dict']
-    # state_dict = torch.load(os.path.join(save_path, 'cyclic_checkpoint_epoch149.pth'), map_location='cpu')
+    # state_dict = torch.load(os.path.join(save_path, 'cyclic_checkpoint_epoch99.pth'), map_location='cpu')
     # state_dict = torch.load(os.path.join(save_path, 'checkpoint_epoch_70.pth'), map_location='cpu')
     model.load_state_dict(state_dict, strict=True)
     
@@ -134,7 +142,7 @@ def train():
             
     # print(model)
 
-    ## validation if lora activate validation_accuracy_lora 
+    ## validation 
     if args.type == 'lora':
         test_accuracy = validation_accuracy_lora(model, test_loader, device)
     else:
@@ -157,10 +165,8 @@ def train():
                 output = resnet_forward(model, inputs)
             elif args.type == 'lora':
                 with autocast(enabled=True):
-                    features = model.forward_features(inputs)
-                    output = model.linear(features)
-                    output = torch.softmax(output, dim=1)
-                    print(output.shape)
+                    output = lora_forward(model, inputs)
+                    # print(output.shape)
                 
             outputs.append(output.cpu())
             targets.append(target.cpu())

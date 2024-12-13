@@ -206,7 +206,7 @@ def calculate_ece(probs, y_true, normalize = False, bins = 15, is_spline = False
     # error = 100 - accuracy
     # print(confs.shape, preds)
     ece = ECE(confs, preds, y_true, bin_size = 1/bins)
-    mce = MCE(confs, preds, y_true, bin_size = 1/bins)
+    # mce = MCE(confs, preds, y_true, bin_size = 1/bins)
     oe = OE(confs, preds, y_true, bin_size = 1/bins)
     
     return ece

@@ -3,6 +3,7 @@
 import torch
 import numpy as np
 from utils import calculate_ece
+from torch.cuda.amp.autocast_mode import autocast
 
 def rein_forward(model, inputs):
     # Forward pass for the model
@@ -11,7 +12,14 @@ def rein_forward(model, inputs):
     output = torch.softmax(output, dim=1)
     return output
 
-def validate(model, valid_loader, device):
+def lora_forward(model, inputs):
+    with autocast(enabled=True):
+        features = model.forward_features(inputs)
+        output = model.linear(features)
+        output = torch.softmax(output, dim=1)
+    return output
+
+def validate(model, valid_loader, device, args):
     """
     Perform inference on the test_loader using the given model and evaluate results.
 
@@ -29,14 +37,15 @@ def validate(model, valid_loader, device):
     
     # Set the model to evaluation mode
     model.eval()
-    
     with torch.no_grad():
-        for batch_idx, (inputs, target) in enumerate(valid_loader):
-            # Move inputs and targets to the specified device
+        for inputs, target in valid_loader:
             inputs, target = inputs.to(device), target.to(device)
-            
-            # Forward pass
-            output = rein_forward(model, inputs)
+            if args.type == 'rein':
+                output = rein_forward(model, inputs)
+                # print(output.shape)  
+            elif args.type == 'lora':
+                with autocast(enabled=True):
+                    output = lora_forward(model, inputs)
             
             # Append results
             outputs.append(output.cpu())

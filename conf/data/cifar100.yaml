@@ -4,7 +4,7 @@ data_root: /home/youmin/workspace/VFMs-Adapters-Ensemble/cifar100
 batch_size: 32 #128
 num_workers: 4
 save_path: ./checkpoints/checkpoints_cifar100
-epoch: 230
+epoch: 250
 num_classes: 100
 
 object:

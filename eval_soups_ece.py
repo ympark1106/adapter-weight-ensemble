@@ -94,7 +94,7 @@ def greedy_soup_ensemble(models, model_names, valid_loader, device, variant, con
             for k in new_ingredient_params
         }
 
-        temp_model = get_model_from_sd(greedy_soup_params, variant, config, device)
+        temp_model = get_model_from_sd(potential_greedy_soup_params, variant, config, device)
         temp_model.eval()
         
         # Evaluate the potential greedy soup model
