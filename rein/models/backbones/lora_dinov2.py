@@ -53,7 +53,7 @@ class LoRADinoVisionTransformer(nn.Module):
         super().__init__()
         self.dino = dino
 
-        print(self.dino)
+        # print(self.dino)
         r = 4
         self.alpha = 4
         self.w_As = []  # These are linear layers

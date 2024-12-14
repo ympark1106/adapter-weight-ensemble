@@ -1,6 +1,7 @@
 import warnings
 warnings.filterwarnings("ignore", message="xFormers is not available")
-
+import contextlib
+import io
 import os
 import torch
 import torch.nn as nn
@@ -52,37 +53,6 @@ def initialize_model(variant, config, device, args):
         
     return model
 
-
-# Model initialization
-def initialize_models(save_paths, variant, config, device, args):
-    models = []
-    if args.type == 'rein':
-        for save_path in save_paths:
-            model = rein.ReinsDinoVisionTransformer(**variant)
-            model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
-            state_dict = torch.load(save_path, map_location='cpu')
-            model.load_state_dict(state_dict, strict=False)
-            model.to(device)
-            model.eval()
-            models.append(model)
-    elif args.type == 'lora':
-        model_load = dino_variant._small_dino
-        dino = torch.hub.load('facebookresearch/dinov2', model_load)
-        dino_state_dict = dino.state_dict()
-        new_state_dict = dict()
-        for k in dino_state_dict.keys():
-            new_k = k.replace("attn.qkv", "attn.qkv.qkv")
-            new_state_dict[new_k] = dino_state_dict[k]
-        model = rein.LoRADinoVisionTransformer(dino)
-        for save_path in save_paths:
-            state_dict = torch.load(save_path, map_location='cpu')
-            model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
-            model.load_state_dict(state_dict, strict=False)
-            model.to(device)
-            model.eval()
-            models.append(model)
-    print(models)
-    return models
 
 
 def get_model_from_sd(state_dict, variant, config, device, args):
@@ -145,7 +115,7 @@ def greedy_soup_ensemble(models, model_names, valid_loader, device, variant, con
     greedy_soup_ingredients = [sorted_models[0][0]]
     
     TOLERANCE = (sorted_models[-1][1] - sorted_models[0][1]) / 2
-    TOLERANCE = 1
+    TOLERANCE = 0
     print(f'Tolerance: {TOLERANCE}')
 
     for i in range(1, len(models)):
@@ -229,6 +199,12 @@ def train():
         os.path.join(config['save_path'], 'lora_focal_hydra/cyclic_checkpoint_epoch189.pth'),
         os.path.join(config['save_path'], 'lora_focal_hydra/cyclic_checkpoint_epoch219.pth'),
         
+        # os.path.join(config['save_path'], 'lora_focal_hydra/cyclic_checkpoint_epoch89.pth'),
+        # os.path.join(config['save_path'], 'lora_focal_hydra/cyclic_checkpoint_epoch129.pth'),
+        # os.path.join(config['save_path'], 'lora_focal_hydra/cyclic_checkpoint_epoch169.pth'),
+        # os.path.join(config['save_path'], 'lora_focal_hydra/cyclic_checkpoint_epoch209.pth'),
+        # os.path.join(config['save_path'], 'lora_focal_hydra/cyclic_checkpoint_epoch249.pth'),
+        
         # os.path.join(config['save_path'], 'reins_focal_hydra_1/cyclic_checkpoint_epoch99.pth'),
         # os.path.join(config['save_path'], 'reins_focal_hydra_1/cyclic_checkpoint_epoch129.pth'),
         # os.path.join(config['save_path'], 'reins_focal_hydra_1/cyclic_checkpoint_epoch159.pth'),
@@ -248,6 +224,7 @@ def train():
     variant = dino_variant._small_variant
     
     models = []
+
     
     for save_path in save_paths:
         model = initialize_model(variant, config, device, args)
