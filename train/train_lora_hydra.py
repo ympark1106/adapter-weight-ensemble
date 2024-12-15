@@ -110,11 +110,11 @@ def train():
     
     
     # LR decay scheduler 
-    lr_decay_epochs = 70
+    lr_decay_epochs = 50
     lr_scheduler_decay = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[50, 70], gamma=0.1)
 
     cyclic_start_epoch = lr_decay_epochs 
-    cycle_length = 30        # cycle length
+    cycle_length = 40        # cycle length
     cyclic_epochs = max_epoch - cyclic_start_epoch  # 싸이클 총 학습 에포크
     print(f"Starting cyclic learning rate schedule at epoch {cyclic_start_epoch} with cycle length {cycle_length}")
 

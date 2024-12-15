@@ -115,7 +115,7 @@ def greedy_soup_ensemble(models, model_names, valid_loader, device, variant, con
     greedy_soup_ingredients = [sorted_models[0][0]]
     
     TOLERANCE = (sorted_models[-1][1] - sorted_models[0][1]) / 2
-    TOLERANCE = 0
+    TOLERANCE = 1
     print(f'Tolerance: {TOLERANCE}')
 
     for i in range(1, len(models)):
@@ -193,17 +193,17 @@ def train():
         # os.path.join(config['save_path'], 'reins_focal_hydra/cyclic_checkpoint_epoch189.pth'),
         # os.path.join(config['save_path'], 'reins_focal_hydra/cyclic_checkpoint_epoch219.pth'),
         
-        os.path.join(config['save_path'], 'lora_focal_hydra/cyclic_checkpoint_epoch99.pth'),
-        os.path.join(config['save_path'], 'lora_focal_hydra/cyclic_checkpoint_epoch129.pth'),
-        os.path.join(config['save_path'], 'lora_focal_hydra/cyclic_checkpoint_epoch159.pth'),
-        os.path.join(config['save_path'], 'lora_focal_hydra/cyclic_checkpoint_epoch189.pth'),
-        os.path.join(config['save_path'], 'lora_focal_hydra/cyclic_checkpoint_epoch219.pth'),
-        
-        # os.path.join(config['save_path'], 'lora_focal_hydra/cyclic_checkpoint_epoch89.pth'),
+        # os.path.join(config['save_path'], 'lora_focal_hydra/cyclic_checkpoint_epoch99.pth'),
         # os.path.join(config['save_path'], 'lora_focal_hydra/cyclic_checkpoint_epoch129.pth'),
-        # os.path.join(config['save_path'], 'lora_focal_hydra/cyclic_checkpoint_epoch169.pth'),
-        # os.path.join(config['save_path'], 'lora_focal_hydra/cyclic_checkpoint_epoch209.pth'),
-        # os.path.join(config['save_path'], 'lora_focal_hydra/cyclic_checkpoint_epoch249.pth'),
+        # os.path.join(config['save_path'], 'lora_focal_hydra/cyclic_checkpoint_epoch159.pth'),
+        # os.path.join(config['save_path'], 'lora_focal_hydra/cyclic_checkpoint_epoch189.pth'),
+        # os.path.join(config['save_path'], 'lora_focal_hydra/cyclic_checkpoint_epoch219.pth'),
+        
+        os.path.join(config['save_path'], 'lora_focal_hydra/cyclic_checkpoint_epoch89.pth'),
+        os.path.join(config['save_path'], 'lora_focal_hydra/cyclic_checkpoint_epoch129.pth'),
+        os.path.join(config['save_path'], 'lora_focal_hydra/cyclic_checkpoint_epoch169.pth'),
+        os.path.join(config['save_path'], 'lora_focal_hydra/cyclic_checkpoint_epoch209.pth'),
+        os.path.join(config['save_path'], 'lora_focal_hydra/cyclic_checkpoint_epoch249.pth'),
         
         # os.path.join(config['save_path'], 'reins_focal_hydra_1/cyclic_checkpoint_epoch99.pth'),
         # os.path.join(config['save_path'], 'reins_focal_hydra_1/cyclic_checkpoint_epoch129.pth'),

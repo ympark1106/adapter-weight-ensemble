@@ -6,7 +6,6 @@ import torch
 import torch.nn as nn
 import argparse
 import numpy as np
-from torch.cuda.amp.autocast_mode import autocast
 
 from utils import read_conf, validation_accuracy, ModelWithTemperature, validate, evaluate, calculate_ece, calculate_nll, validation_accuracy_lora
 import dino_variant
@@ -20,13 +19,6 @@ def rein_forward(model, inputs, temp_scaler=None):
     if temp_scaler:
         output = temp_scaler.temperature_scale(output)
     output = torch.softmax(output, dim=1)
-    return output
-
-def lora_forward(model, inputs):
-    with autocast(enabled=True):
-        features = model.forward_features(inputs)
-        output = model.linear(features)
-        output = torch.softmax(output, dim=1)
     return output
 
 # Data loader setup
@@ -76,44 +68,20 @@ def initialize_model(variant, config, device, args):
         
     return model
 
-def get_model_from_sd(state_dict, variant, config, device, args):
-    if args.type == 'rein':
-        model = rein.ReinsDinoVisionTransformer(**variant)
-        model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
-        model.load_state_dict(state_dict, strict=True)
-    elif args.type == 'lora':
-        model_load = dino_variant._small_dino
-        dino = torch.hub.load('facebookresearch/dinov2', model_load)
-        dino_state_dict = dino.state_dict()
-        new_state_dict = dict()
-        for k in dino_state_dict.keys():
-            new_k = k.replace("attn.qkv", "attn.qkv.qkv")
-            new_state_dict[new_k] = dino_state_dict[k]
-        model = rein.LoRADinoVisionTransformer(dino)
-        model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
-        model.load_state_dict(state_dict, strict=True)
-    model.to(device)
-    
-    return model
-
-
 # Validation and test accuracy calculation
 def validate_model(model, valid_loader, device, mode):
     return validation_accuracy(model, valid_loader, device, mode=mode)
 
 # Sort models by accuracy
-# def sort_models_by_accuracy(models, valid_loader, device, mode):
-#     model_accuracies = [(model, validate_model(model, valid_loader, device, mode)) for model in models]
-#     sorted_models = sorted(model_accuracies, key=lambda x: x[1], reverse=True)  # Sort by accuracy (descending)
-#     return sorted_models
+def sort_models_by_accuracy(models, valid_loader, device, mode):
+    model_accuracies = [(model, validate_model(model, valid_loader, device, mode)) for model in models]
+    sorted_models = sorted(model_accuracies, key=lambda x: x[1], reverse=True)  # Sort by accuracy (descending)
+    return sorted_models
 
 # Greedy soup ensemble function
-def greedy_soup_ensemble(models, model_names, valid_loader, variant, config, args, device):
+def greedy_soup_ensemble(models, model_names, valid_loader, device):
     # Evaluate and sort models by validation accuracy
-    if args.type == 'rein':
-        model_accuracies = [(model, validation_accuracy(model, valid_loader, device), name) for model, name in zip(models, model_names)]
-    elif args.type == 'lora':
-        model_accuracies = [(model, validation_accuracy_lora(model, valid_loader, device), name) for model, name in zip(models, model_names)]
+    model_accuracies = [(model, validation_accuracy(model, valid_loader, device), name) for model, name in zip(models, model_names)]
     
     # Sort models based on accuracy
     sorted_models = sorted(model_accuracies, key=lambda x: x[1], reverse=True)
@@ -132,7 +100,7 @@ def greedy_soup_ensemble(models, model_names, valid_loader, variant, config, arg
     for i in range(1, len(sorted_models)):
         print(f'Testing model {i+1} ({sorted_models[i][2]}) of {len(sorted_models)}')
         
-        # previous_greedy_soup_params = {k: v.clone() for k, v in greedy_soup_params.items()}
+        previous_greedy_soup_params = {k: v.clone() for k, v in greedy_soup_params.items()}
         
         # New model parameters to test as an additional ingredient
         new_ingredient_params = sorted_models[i][0].state_dict()
@@ -147,14 +115,11 @@ def greedy_soup_ensemble(models, model_names, valid_loader, variant, config, arg
         }
         
         # Load the new potential parameters into the base model for evaluation
-        temp_model = get_model_from_sd(potential_greedy_soup_params, variant, config, device, args)
-        temp_model.eval()
+        sorted_models[0][0].load_state_dict(potential_greedy_soup_params)
+        sorted_models[0][0].eval()
         
         # Calculate validation accuracy with the potential new soup parameters
-        if args.type == 'rein':
-            held_out_val_accuracy = validation_accuracy(temp_model, valid_loader, device, mode='rein')
-        elif args.type == 'lora':
-            held_out_val_accuracy = validation_accuracy_lora(temp_model, valid_loader, device)
+        held_out_val_accuracy = validation_accuracy(sorted_models[0][0], valid_loader, device)
         
         print(f'Held-out validation accuracy: {held_out_val_accuracy}, best accuracy so far: {max_accuracy}.\n')
         
@@ -165,6 +130,9 @@ def greedy_soup_ensemble(models, model_names, valid_loader, variant, config, arg
             greedy_soup_params = potential_greedy_soup_params  # Save the improved parameters
             print(f'[New greedy soup ingredient added. Number of ingredients: {len(greedy_soup_ingredients)}]\n')
         else:
+            # Revert to the best-known parameters if the new ingredient didn’t improve accuracy
+            greedy_soup_params = previous_greedy_soup_params
+            sorted_models[0][0].load_state_dict(greedy_soup_params)  # Revert to best params
             print(f'[No improvement. Reverting to best-known parameters.]\n')
 
     return greedy_soup_params, sorted_models[0][0]
@@ -205,17 +173,11 @@ def train():
         # os.path.join(config['save_path'], 'reins_ce3'),
         # os.path.join(config['save_path'], 'reins_ce4'),
         
-        os.path.join(config['save_path'], 'lora_focal_1'),
-        os.path.join(config['save_path'], 'lora_focal_2'),
-        os.path.join(config['save_path'], 'lora_focal_3'),
-        os.path.join(config['save_path'], 'lora_focal_4'),
-        os.path.join(config['save_path'], 'lora_focal_5'),
-        
-        # os.path.join(config['save_path'], 'reins_focal_1'),
-        # os.path.join(config['save_path'], 'reins_focal_2'),
-        # os.path.join(config['save_path'], 'reins_focal_3'),
-        # os.path.join(config['save_path'], 'reins_focal_4'),
-        # os.path.join(config['save_path'], 'reins_focal_5'),
+        os.path.join(config['save_path'], 'reins_focal_1'),
+        os.path.join(config['save_path'], 'reins_focal_2'),
+        os.path.join(config['save_path'], 'reins_focal_3'),
+        os.path.join(config['save_path'], 'reins_focal_4'),
+        os.path.join(config['save_path'], 'reins_focal_5'),
         # os.path.join(config['save_path'], 'reins_focal_6'),
         # os.path.join(config['save_path'], 'reins_focal_lr_1'),
         # os.path.join(config['save_path'], 'reins_focal_lr_2'),
@@ -230,49 +192,25 @@ def train():
     ]
     
     model_names = [os.path.basename(path) for path in save_paths]
-    
-    variant = dino_variant._small_variant
-    models = []
 
-    
-    for save_path in save_paths:
-        model = initialize_model(variant, config, device, args)
-        state_dict = torch.load(os.path.join(save_path, 'last.pth.tar'), map_location='cpu')['state_dict']
-        model.load_state_dict(state_dict, strict=False)
-        model.to(device)
-        model.eval()
-        models.append(model)
-    
+    variant = dino_variant._small_variant
+    models = initialize_models(save_paths, variant, config, device)
     test_loader, valid_loader = setup_data_loaders(args, data_path, batch_size)
     
     # Step 1: Compute greedy soup parameters
-    greedy_soup_params, model1 = greedy_soup_ensemble(models, model_names, valid_loader, variant, config, args, device)
+    greedy_soup_params, model1 = greedy_soup_ensemble(models, model_names, valid_loader, device)
 
     # Evaluate the final model on the test set
     model1.load_state_dict(greedy_soup_params)
-    model1.eval() 
-           
-    if args.type == 'rein':
-        test_accuracy = validation_accuracy(model1, test_loader, device, mode='rein')
-    elif args.type == 'lora':
-        test_accuracy = validation_accuracy_lora(model1, test_loader, device)    
+    model1.eval()
+    test_accuracy = validation_accuracy(model1, test_loader, device, mode=args.type)
     print('Test accuracy:', test_accuracy)
 
     outputs, targets = [], []
     with torch.no_grad():
         for inputs, target in test_loader:
             inputs, target = inputs.to(device), target.to(device)
-            if args.type == 'rein':
-                output = rein_forward(model, inputs)
-                # print(output.shape)  
-            elif args.type == 'lora':
-                with autocast(enabled=True):
-                    features = model.forward_features(inputs)
-                    output = model.linear(features)
-                    output = torch.softmax(output, dim=1)
-                    # print(output.shape)
-                
-                
+            output = rein_forward(model1, inputs)
             outputs.append(output.cpu())
             targets.append(target.cpu())
     
