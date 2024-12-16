@@ -10,7 +10,7 @@ from torch.cuda.amp.autocast_mode import autocast
 
 from utils import read_conf, validation_accuracy, ModelWithTemperature, validate, evaluate, calculate_ece, calculate_nll, validation_accuracy_lora
 import dino_variant
-from data import cifar10, cifar100, cub, ham10000, bloodmnist
+from data import cifar10, cifar100, cub, ham10000, bloodmnist, retinamnist
 import rein
 
 # Model forward function
@@ -44,6 +44,8 @@ def setup_data_loaders(args, data_path, batch_size):
         _, valid_loader, test_loader = ham10000.get_dataloaders(data_path, batch_size=32, num_workers=4)
     elif args.data == 'bloodmnist':
         _, test_loader, valid_loader = bloodmnist.get_dataloader(batch_size,download=True, num_workers=4)
+    elif args.data == 'retinamnist':
+        _, test_loader, valid_loader = retinamnist.get_dataloader(batch_size, download=True, num_workers=4)
     else:
         raise ValueError(f"Unsupported data type: {args.data}")
     

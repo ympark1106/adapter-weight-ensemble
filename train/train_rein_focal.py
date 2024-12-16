@@ -23,7 +23,7 @@ import rein
 
 import dino_variant
 from sklearn.metrics import f1_score
-from data import cifar10, cifar100, cub, ham10000, bloodmnist, pathmnist 
+from data import cifar10, cifar100, cub, ham10000, bloodmnist, pathmnist, retinamnist
 from losses import RankMixup_MNDCG, RankMixup_MRL, focal_loss, focal_loss_adaptive_gamma
 
 def count_trainable_params(model):
@@ -74,6 +74,8 @@ def train():
         train_loader, valid_loader, _ = bloodmnist.get_dataloader(batch_size=32, download=True, num_workers=4)
     elif args.data == 'pathmnist':
         train_loader, valid_loader, _ = pathmnist.get_dataloader(batch_size=32, download=True, num_workers=4)
+    elif args.data == 'retinamnist':    
+        train_loader, valid_loader, _ = retinamnist.get_dataloader(batch_size=32, download=True, num_workers=4)
     
         
     if args.netsize == 's':

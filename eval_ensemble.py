@@ -11,7 +11,7 @@ import torch.nn.functional as F
 from torch.cuda.amp.autocast_mode import autocast
 from utils import read_conf, validation_accuracy, ModelWithTemperature, validate, evaluate, calculate_ece, calculate_nll, validation_accuracy_lora
 import dino_variant
-from data import cifar10, cifar100, cub, ham10000, bloodmnist, pathmnist
+from data import cifar10, cifar100, cub, ham10000, bloodmnist, pathmnist, retinamnist
 import rein
 from losses import DECE
 
@@ -73,6 +73,8 @@ def setup_data_loaders(args, data_path, batch_size):
         _, valid_loader, test_loader = bloodmnist.get_dataloader(batch_size=32, download=True, num_workers=4)
     elif args.data == 'pathmnist':
         _, valid_loader, test_loader = pathmnist.get_dataloader(batch_size=32, download=True, num_workers=4)
+    elif args.data == 'retinamnist':
+        _, valid_loader, test_loader = retinamnist.get_dataloader(batch_size=32, download=True, num_workers=4)
     else:
         raise ValueError(f"Unsupported data type: {args.data}")
     
@@ -156,10 +158,11 @@ def ensemble_evaluate(models, test_loader, device, args):
     with torch.no_grad():
         for inputs, target in test_loader:
             inputs, target = inputs.to(device), target.to(device)
-            # if targets.ndim > 1 and targets.size(1) > 1:
-            #     targets = torch.argmax(targets, dim=1)
-            # if targets.ndim > 1:
-            #     targets = targets.view(-1)
+            
+            if target.ndim > 1 and target.size(1) > 1:
+                target = torch.argmax(target, dim=1)
+            if target.ndim > 1:
+                target = target.view(-1)
                 
             batch_outputs = []
             
@@ -175,6 +178,7 @@ def ensemble_evaluate(models, test_loader, device, args):
             ensemble_output = torch.stack(batch_outputs).mean(dim=0)
             outputs.append(ensemble_output.cpu().numpy())
             targets.append(target.cpu().numpy())
+            
 
             _, predicted = torch.max(ensemble_output, dim=1)
             correct += (predicted == target).sum().item()

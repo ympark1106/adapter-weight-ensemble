@@ -1,91 +1,105 @@
-import numpy as np
-import matplotlib.pyplot as plt
+import rein
+import os
 import torch
 import torch.nn as nn
-import rein
 import dino_variant
-from eval import rein_forward
+import numpy as np
+import matplotlib.pyplot as plt
+from tqdm import tqdm
+import time
+import argparse
+from utils import read_conf
+from torch.cuda.amp.autocast_mode import autocast
+from data import cifar10, cifar100, cub, ham10000, bloodmnist, pathmnist
+from losses import RankMixup_MNDCG, RankMixup_MRL, focal_loss, focal_loss_adaptive_gamma
+
+
+def lora_forward(model, inputs):
+    with autocast(enabled=True):
+        features = model.forward_features(inputs)
+        output = model.linear(features)
+        output = torch.softmax(output, dim=1)
+    return output
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--data', '-d', type=str, default='cub')
+parser.add_argument('--gpu', '-g', default = '0', type=str)
+parser.add_argument('--netsize', default='s', type=str)
+parser.add_argument('--save_path', '-s', type=str)
+args = parser.parse_args()
+
+config = read_conf('conf/data/'+args.data+'.yaml')
+device = 'cuda:'+args.gpu
+# save_path = os.path.join(config['save_path'], args.save_path)
+data_path = config['data_root']
+batch_size = int(config['batch_size'])
+
+if args.data == 'cifar10':
+    test_loader = cifar10.get_test_loader(batch_size, shuffle=True, num_workers=4, pin_memory=True, get_val_temp=0, data_dir=data_path)
+elif args.data == 'cifar100':
+    test_loader = cifar100.get_test_loader(data_dir=data_path, batch_size=32, shuffle=True, num_workers=4, pin_memory=True)
+elif args.data == 'cub':
+    test_loader = cub.get_test_loader(data_path, batch_size=32, scale_size=256, crop_size=224, num_workers=4, pin_memory=True)
+elif args.data == 'ham10000':
+    train_loader, valid_loader, test_loader = ham10000.get_dataloaders(data_path, batch_size=32, num_workers=4)
+elif args.data == 'bloodmnist':
+    train_loader, test_loader, valid_loader = bloodmnist.get_dataloader(batch_size, download=True, num_workers=4)
+elif args.data == 'pathmnist':
+    train_loader, test_loader, valid_loader = pathmnist.get_dataloader(batch_size, download=True, num_workers=4)
 
 model_load = dino_variant._small_dino
 variant = dino_variant._small_variant
 
-# 가중치 보간 함수 정의
-def interpolate_weights(state_dict1, model_or_state_dict2, alpha):
-    interpolated_state_dict = {}
 
-    # 두 번째 인자가 모델인 경우 state_dict 가져오기
-    if isinstance(model_or_state_dict2, torch.nn.Module):
-        state_dict2 = model_or_state_dict2.state_dict()
-    else:
-        state_dict2 = model_or_state_dict2  # 이미 딕셔너리인 경우 그대로 사용
+dino = torch.hub.load('facebookresearch/dinov2', model_load)
+dino_state_dict = dino.state_dict()
+new_state_dict = dict()
 
-    # 딕셔너리 형태로 보간, 특정 키 필터링 (linear 계층 무시)
-    for key in state_dict1:
-        if key in state_dict2 and not key.startswith('linear'):
-            interpolated_state_dict[key] = (1 - alpha) * state_dict1[key] + alpha * state_dict2[key]
-    return interpolated_state_dict
-
-
-# 손실 계산 함수
-def compute_loss(model, data_loader, criterion, device):
-    model.eval()
-    total_loss = 0
-    outputs = []
-    targets = []
-    with torch.no_grad():
-        for inputs, targets in data_loader:
-            inputs, targets = inputs.to(device), targets.to(device)
-            output = rein_forward(model, inputs)
-            outputs.append(output.cpu())
-            targets.append(targets.cpu())
-            loss = criterion(outputs, targets)
-            total_loss += loss.item()
-    return total_loss / len(data_loader)
-
-# 손실 경관에 모델 위치 표시
-def plot_loss_landscape_with_models(model1, model2, model3, data_loader, criterion, device, save_path='loss_landscape_with_models.png', num_classes=200):
-    alphas = np.linspace(0, 1, 50)
-    betas = np.linspace(0, 1, 50)
-    loss_landscape = np.zeros((len(alphas), len(betas)))
-
-    for i, alpha in enumerate(alphas):
-        for j, beta in enumerate(betas):
-            # Model 1과 Model 2를 alpha로 보간한 후 Model 3과 beta로 보간
-            temp_state_dict = interpolate_weights(model1.state_dict(), model2.state_dict(), alpha)
-            interpolated_state_dict = interpolate_weights(temp_state_dict, model3.state_dict(), beta)
-            
-            # 임시 모델 생성
-            temp_model = rein.ReinsDinoVisionTransformer(**variant)
-            temp_model.load_state_dict(interpolated_state_dict)
-            temp_model.linear = nn.Linear(variant['embed_dim'], num_classes)
-            temp_model.to(device)
-
-            # 손실 계산
-            loss = compute_loss(temp_model, data_loader, criterion, device)
-            loss_landscape[i, j] = loss
-
-    # 손실 경관 그리기
-    plt.figure(figsize=(10, 8))
-    X, Y = np.meshgrid(alphas, betas)
-    contour = plt.contourf(X, Y, loss_landscape, 20, cmap='viridis')
-    plt.colorbar(contour)
-
-    # 각 모델의 위치 계산 및 표시
-    loss1 = compute_loss(model1, data_loader, criterion, device)
-    loss2 = compute_loss(model2, data_loader, criterion, device)
-    loss3 = compute_loss(model3, data_loader, criterion, device)
+for k in dino_state_dict.keys():
+    new_k = k.replace("attn.qkv", "attn.qkv.qkv")
+    new_state_dict[new_k] = dino_state_dict[k]
     
-    plt.scatter(0, 0, color='red', label=f'Model 1: Loss = {loss1:.4f}')
-    plt.scatter(1, 0, color='blue', label=f'Model 2: Loss = {loss2:.4f}')
-    plt.scatter(0, 1, color='green', label=f'Model 3: Loss = {loss3:.4f}')
-    
-    plt.title('Loss Landscape with Model Positions')
-    plt.xlabel('Alpha (Model 1 to Model 2)')
-    plt.ylabel('Beta (Blended with Model 3)')
-    plt.legend()
-    
-    # 이미지 저장
-    plt.savefig(save_path)
-    plt.close()
+model = rein.LoRADinoVisionTransformer(dino)
+model.dino.load_state_dict(new_state_dict, strict=False)
+model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
 
+model.eval()
 
+criterion = focal_loss.FocalLoss(gamma=3)
+
+weights = model.state_dict()
+trainable_keys = [k for k, v in weights.items() if v.requires_grad]
+trainable_weights = {k: v.clone() for k, v in weights.items() if k in trainable_keys}
+# state_dict = torch.load(os.path.join(save_path, 'last.pth.tar'), map_location='cpu')['state_dict']
+
+grid_size = 10
+delta = 0.1
+loss_grid = np.zeros((grid_size, grid_size))
+for i in range(grid_size):
+    for j in range(grid_size):
+        start = time.time()
+        for k, v in weights.items():
+            weights[k] = weights[k] + delta * (i - grid_size // 2) * v + delta * (
+                j - grid_size // 2) * torch.randn_like(v)
+        model.load_state_dict(weights)
+        print('change weight takes',time.time()-start)
+        running_loss = 0.0
+        for _, data in tqdm(enumerate(train_loader, 0)):
+            inputs, labels = data
+
+            outputs = lora_forward(model, inputs)
+            loss = criterion(outputs, labels)
+
+            running_loss += loss.item()
+
+        loss_grid[i, j] = running_loss
+        print('all_process',time.time()-start)
+        
+        
+plt.imshow(loss_grid, cmap='jet', interpolation='nearest')
+plt.colorbar()
+plt.title('Loss Landscape')
+plt.xlabel('Delta X')
+plt.ylabel('Delta Y')
+plt.savefig('loss_landscape.png', dpi=300)  
+plt.show()

@@ -13,6 +13,10 @@ def validation_accuracy_lora(model, loader, device):
     with torch.no_grad():
         for batch_idx, (inputs, targets) in enumerate(loader):
             inputs, targets = inputs.to(device), targets.to(device)
+            if targets.ndim > 1 and targets.size(1) > 1:
+                targets = torch.argmax(targets, dim=1)
+            if targets.ndim > 1:
+                targets = targets.view(-1) 
             outputs = model.forward_features(inputs)
             outputs = model.linear(outputs)
             #print(outputs.shape)

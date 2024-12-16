@@ -19,7 +19,7 @@ import random
 import rein
 
 import dino_variant
-from data import cifar10, cifar100, cub, ham10000, bloodmnist, pathmnist
+from data import cifar10, cifar100, cub, ham10000, bloodmnist, pathmnist, retinamnist
 
 
 def rein_forward(model, inputs):
@@ -94,6 +94,8 @@ def train():
         train_loader, test_loader, valid_loader = bloodmnist.get_dataloader(batch_size, download=True, num_workers=4)
     elif args.data == 'pathmnist':
         train_loader, test_loader, valid_loader = pathmnist.get_dataloader(batch_size, download=True, num_workers=4)
+    elif args.data == 'retinamnist':
+        train_loader, test_loader, valid_loader = retinamnist.get_dataloader(batch_size, download=True, num_workers=4)
         
         
     if args.netsize == 's':
