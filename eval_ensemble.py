@@ -8,7 +8,8 @@ import argparse
 import numpy as np
 
 import torch.nn.functional as F
-from utils import read_conf, validation_accuracy, ModelWithTemperature, validate, evaluate, calculate_ece, calculate_nll
+from torch.cuda.amp.autocast_mode import autocast
+from utils import read_conf, validation_accuracy, ModelWithTemperature, validate, evaluate, calculate_ece, calculate_nll, validation_accuracy_lora
 import dino_variant
 from data import cifar10, cifar100, cub, ham10000, bloodmnist, pathmnist
 import rein
@@ -21,17 +22,38 @@ def rein_forward(model, inputs):
     output = torch.softmax(output, dim=1)
     return output
 
-def initialize_models(save_paths, variant, config, device):
-    models = []
-    for save_path in save_paths:
-        model = rein.ReinsDinoVisionTransformer(**variant)
+def lora_forward(model, inputs):
+    with autocast(enabled=True):
+        features = model.forward_features(inputs)
+        output = model.linear(features)
+        output = torch.softmax(output, dim=1)
+    return output
+
+
+def initialize_model(variant, config, device, args):
+    model_load = dino_variant._small_dino
+    dino = torch.hub.load('facebookresearch/dinov2', model_load)
+    dino_state_dict = dino.state_dict()
+
+    if args.type == 'rein':
+        model = rein.ReinsDinoVisionTransformer(
+            **variant
+        )
         model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
-        state_dict = torch.load(os.path.join(save_path, 'last.pth.tar'), map_location='cpu')['state_dict']
-        model.load_state_dict(state_dict, strict=False)
+        model.load_state_dict(dino_state_dict, strict=False)
         model.to(device)
-        model.eval()
-        models.append(model)
-    return models
+
+    elif args.type == 'lora':
+        new_state_dict = dict()
+        for k in dino_state_dict.keys():
+            new_k = k.replace("attn.qkv", "attn.qkv.qkv")
+            new_state_dict[new_k] = dino_state_dict[k]
+        model = rein.LoRADinoVisionTransformer(dino)
+        model.dino.load_state_dict(new_state_dict, strict=False)
+        model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
+        model.to(device)
+        
+    return model
 
 
 # Data loader setup
@@ -121,12 +143,11 @@ def evaluate_ensemble(outputs, targets, bins=15):
     oe = OE(confs, preds, targets, bin_size = 1/bins)
     
     
-    print("=== Evaluation Results ===")
     print(f"ECE: {ece:.4f}")
     print(f"OE: {oe:.4f}")
     print("==========================")
 
-def ensemble_evaluate(models, test_loader, device):
+def ensemble_evaluate(models, test_loader, device, args):
     outputs = []
     targets = []
     correct = 0
@@ -141,9 +162,15 @@ def ensemble_evaluate(models, test_loader, device):
             #     targets = targets.view(-1)
                 
             batch_outputs = []
-            for model in models:
-                output = rein_forward(model, inputs)
-                batch_outputs.append(output)
+            
+            if args.type == 'rein':
+                for model in models:
+                    output = rein_forward(model, inputs)
+                    batch_outputs.append(output)
+            elif args.type == 'lora':
+                for model in models:
+                    output = lora_forward(model, inputs)
+                    batch_outputs.append(output)
 
             ensemble_output = torch.stack(batch_outputs).mean(dim=0)
             outputs.append(ensemble_output.cpu().numpy())
@@ -154,6 +181,7 @@ def ensemble_evaluate(models, test_loader, device):
             total += target.size(0)
 
     accuracy = correct / total * 100
+    print("=== Evaluation Results ===")
     print(f"Ensemble Accuracy: {accuracy:.2f}%")
 
     outputs = np.vstack(outputs)
@@ -179,11 +207,17 @@ def train():
         # os.path.join(config['save_path'], 'reins_ce3'),
         # os.path.join(config['save_path'], 'reins_ce4'),
         
-        os.path.join(config['save_path'], 'reins_focal_1'),
-        os.path.join(config['save_path'], 'reins_focal_2'),
-        os.path.join(config['save_path'], 'reins_focal_3'),
-        os.path.join(config['save_path'], 'reins_focal_4'),
-        os.path.join(config['save_path'], 'reins_focal_5'),
+        os.path.join(config['save_path'], 'lora_focal_1'),
+        os.path.join(config['save_path'], 'lora_focal_2'),
+        os.path.join(config['save_path'], 'lora_focal_3'),
+        os.path.join(config['save_path'], 'lora_focal_4'),
+        os.path.join(config['save_path'], 'lora_focal_5'),
+        
+        # os.path.join(config['save_path'], 'reins_focal_1'),
+        # os.path.join(config['save_path'], 'reins_focal_2'),
+        # os.path.join(config['save_path'], 'reins_focal_3'),
+        # os.path.join(config['save_path'], 'reins_focal_4'),
+        # os.path.join(config['save_path'], 'reins_focal_5'),
         # os.path.join(config['save_path'], 'reins_focal_lr_1'),
         # os.path.join(config['save_path'], 'reins_focal_lr_2'),
         # os.path.join(config['save_path'], 'reins_focal_lr_3'),
@@ -199,10 +233,20 @@ def train():
     model_names = [os.path.basename(path) for path in save_paths]
 
     variant = dino_variant._small_variant
-    models = initialize_models(save_paths, variant, config, device)
+    models = []
+
+    
+    for save_path in save_paths:
+        model = initialize_model(variant, config, device, args)
+        state_dict = torch.load(os.path.join(save_path, 'last.pth.tar'), map_location='cpu')['state_dict']
+        model.load_state_dict(state_dict, strict=False)
+        model.to(device)
+        model.eval()
+        models.append(model)
+        
     test_loader, valid_loader = setup_data_loaders(args, data_path, batch_size)
     
-    ensemble_evaluate(models, test_loader, device)
+    ensemble_evaluate(models, test_loader, device, args)
     
 
 if __name__ == '__main__':
