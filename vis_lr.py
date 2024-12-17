@@ -1,18 +1,18 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
-# Initial settings
-epochs = 220  # Total epochs
+# Initial settings for the original LR schedule
+epochs = 220  # Total epochs for the original schedule
 initial_lr = 1e-3
 lr_decay_50 = 1e-4
 cycle_length = 30  # Cycle length for CosineAnnealingWarmRestarts
 eta_min = 1e-5  # Minimum learning rate in cyclic schedule
 
-# Initialize learning rate array
+# Initialize learning rate array for the original schedule
 lr_values = []
 current_lr = initial_lr
 
-# LR schedule
+# Original LR schedule
 for epoch in range(epochs):
     if epoch < 50:
         current_lr = initial_lr
@@ -25,17 +25,35 @@ for epoch in range(epochs):
         current_lr = cos_lr
     lr_values.append(current_lr)
 
-# Plotting the LR schedule
-plt.figure(figsize=(10, 6))
-plt.plot(range(epochs), lr_values, label="Learning Rate")
+# Settings for the MultiStepLR schedule
+max_epoch = 100  # Maximum epochs for MultiStepLR
+lr_decay_milestones = [int(0.5 * max_epoch), int(0.75 * max_epoch), int(0.9 * max_epoch)]  # [50, 75, 90]
+gamma = 0.1  # Decay factor
+
+# Initialize learning rate array for the MultiStepLR schedule
+lr_multistep = []
+for epoch in range(max_epoch):
+    # Count how many milestones have been passed
+    milestones_passed = sum(epoch >= milestone for milestone in lr_decay_milestones)
+    # Calculate the current LR based on the number of milestones passed
+    current_lr_ms = initial_lr * (gamma ** milestones_passed)
+    lr_multistep.append(current_lr_ms)
+
+# Plotting the original LR schedule
+plt.figure(figsize=(12, 7))
+plt.plot(range(epochs), lr_values, label="Snapshot Soup LR Schedule", color='blue')
+
+# Plotting the MultiStepLR schedule up to max_epoch
+plt.plot(range(max_epoch), lr_multistep, alpha=0.7, label="Single Model LR Schedule", color='red')
+
+# Adding vertical lines to indicate key points
+plt.axvline(x=70, color='purple', alpha=0.5, label='Branching Point in Snapshot Soup', linestyle='--')
+
+# Labels and title
 plt.xlabel("Epoch")
 plt.ylabel("Learning Rate")
-plt.title("Learning Rate Schedule")
-# plt.axvline(x=50, color='r', linestyle='--', label='Epoch 50 (1e-3 -> 1e-4)')
-plt.axvline(x=70, color='r', alpha = 0.5, linestyle='--', label='Braching Point (Cyclic LR Start)')
+plt.title("Learning Rate Schedules")
 plt.legend()
-plt.grid()
+plt.grid(True)
+plt.tight_layout()
 plt.show()
-
-
-
