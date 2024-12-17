@@ -23,7 +23,7 @@ import rein
 
 import dino_variant
 from sklearn.metrics import f1_score
-from data import cifar10, cifar100, cub, ham10000, bloodmnist, pathmnist
+from data import cifar10, cifar100, cub, ham10000, bloodmnist, pathmnist, retinamnist
 from losses import RankMixup_MNDCG, RankMixup_MRL, focal_loss, focal_loss_adaptive_gamma
 
 
@@ -69,7 +69,8 @@ def train():
         train_loader, valid_loader,_ = bloodmnist.get_dataloader(batch_size, download=True, num_workers=4)
     elif args.data == 'pathmnist':
         train_loader, valid_loader,_ = pathmnist.get_dataloader(batch_size, download=True, num_workers=4)
-    
+    elif args.data == 'retinamnist':
+        train_loader, valid_loader,_ = retinamnist.get_dataloader(batch_size, download=True, num_workers=4)
         
     if args.netsize == 's':
         model_load = dino_variant._small_dino
@@ -105,11 +106,11 @@ def train():
     
     
     # LR decay scheduler 
-    lr_decay_epochs = 50
-    lr_scheduler_decay = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[40, 60], gamma=0.1)
+    lr_decay_epochs = 70
+    lr_scheduler_decay = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[50, 70], gamma=0.1)
 
-    cyclic_start_epoch = 50  
-    cycle_length = 40        # cycle length
+    cyclic_start_epoch = lr_decay_epochs  
+    cycle_length = 30        # cycle length
     cyclic_epochs = max_epoch - cyclic_start_epoch  # 싸이클 총 학습 에포크
     print(f"Total cyclic epochs: {cyclic_epochs}")
 

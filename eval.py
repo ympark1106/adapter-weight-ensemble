@@ -159,7 +159,7 @@ def train():
             inputs, target = inputs.to(device), target.to(device)
             if args.type == 'rein':
                 output = rein_forward(model, inputs)
-                print(output.shape)  
+                # print(output.shape)  
             elif args.type == 'rein_dropout':
                 output = rein_forward_mc_dropout(model, inputs, num_samples=10)
                 # print(output.shape)
