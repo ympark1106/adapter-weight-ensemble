@@ -50,7 +50,7 @@ class ModelWithTemperature(nn.Module):
         return logits / self.temperature
 
     # This function probably should live outside of this class, but whatever
-    def set_temperature(self, valid_loader):
+    def set_temperature(self, valid_loader, cross_validate = 'ece'):
         """
         Tune the tempearature of the model (using the validation set).
         We're going to set it to optimize NLL.
@@ -67,6 +67,10 @@ class ModelWithTemperature(nn.Module):
         with torch.no_grad():
             for input, label in valid_loader:
                 input = input.to(self.device)
+                if label.ndim > 1 and label.size(1) > 1:
+                    label = torch.argmax(label, dim=1)
+                if label.ndim > 1:
+                    label = label.view(-1) 
                 logits = rein_forward(self.model, input)
                 # print(logits.shape)                         # 임시 출력
                 logits_list.append(logits.cpu())

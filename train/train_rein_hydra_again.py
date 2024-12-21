@@ -23,7 +23,7 @@ import rein
 
 import dino_variant
 from sklearn.metrics import f1_score
-from data import cifar10, cifar100, cub, ham10000, bloodmnist
+from data import cifar10, cifar100, cub, ham10000, bloodmnist, pathmnist, retinamnist
 from losses import RankMixup_MNDCG, RankMixup_MRL, focal_loss, focal_loss_adaptive_gamma
 
 
@@ -40,6 +40,7 @@ def train():
     parser.add_argument('--gpu', '-g', default = '0', type=str)
     parser.add_argument('--netsize', default='s', type=str)
     parser.add_argument('--save_path', '-s', type=str)
+    parser.add_argument('--checkpoint', '-c', type=str)
     # parser.add_argument('--save_path', '-s', type=str)
     # parser.add_argument('--noise_rate', '-n', type=float, default=0.2)
     args = parser.parse_args()
@@ -48,15 +49,14 @@ def train():
     config = read_conf('conf/data/'+args.data+'.yaml')
     device = 'cuda:'+args.gpu
     save_path = os.path.join(config['save_path'], args.save_path)
+    checkpoint_path = os.path.join(config['save_path'], args.checkpoint)
     data_path = config['data_root']
     batch_size = int(config['batch_size'])
     max_epoch = int(config['epoch'])
-    # noise_rate = args.noise_rate
+
 
     if not os.path.exists(save_path):
         os.mkdir(save_path)
-
-    # lr_decay = [int(0.5*max_epoch), int(0.75*max_epoch), int(0.9*max_epoch)]
 
 
     if args.data == 'cifar10':
@@ -69,7 +69,10 @@ def train():
         train_loader, valid_loader, test_loader = ham10000.get_dataloaders(data_path, batch_size=32, num_workers=4)
     elif args.data == 'bloodmnist':
         train_loader, valid_loader,_ = bloodmnist.get_dataloader(batch_size, download=True, num_workers=4)
-    
+    elif args.data == 'pathmnist':
+        train_loader, valid_loader,_ = pathmnist.get_dataloader(batch_size, download=True, num_workers=4)
+    elif args.data == 'retinamnist':
+        train_loader, valid_loader,_ = retinamnist.get_dataloader(batch_size, download=True, num_workers=4)
         
     if args.netsize == 's':
         model_load = dino_variant._small_dino
@@ -96,56 +99,65 @@ def train():
     
     print(model)
     
+    print("Max epoch: ", max_epoch)
     
-    # criterion = torch.nn.CrossEntropyLoss()
     criterion = focal_loss.FocalLoss(gamma=3) #gamma 커지면 easy sample에 대한 loss 감소
     model.eval()
 
-    # optimizer = torch.optim.SGD(model.parameters(), lr=1e-3, momentum=0.9, weight_decay=1e-5)
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay = 1e-5)
-    # optimizer = torch.optim.Adam(model.parameters(), lr=1e-4, weight_decay = 1e-6)
     
-    # LR decay scheduler (75% 동안)
-    lr_decay_epochs = int(0.7 * max_epoch)
-    lr_scheduler_decay = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[int(0.5 * max_epoch), int(0.7 * max_epoch)], gamma=1)
-
-    # Cyclical LR scheduler (25% 동안)
-    cyclic_scheduler = torch.optim.lr_scheduler.CyclicLR(optimizer, base_lr=1e-5, max_lr=1e-3, step_size_up=8, step_size_down=8, mode='triangular')
-
-    saver = timm.utils.CheckpointSaver(model, optimizer, checkpoint_dir= save_path, max_history = 1) 
     
-    torch.save(model.state_dict(), os.path.join(save_path, f'cyclic_checkpoint_epoch{max_epoch}.pth'))
 
-    # f = open(os.path.join(save_path, 'epoch_acc.txt'), 'w')
-    avg_accuracy = 0.0
+    print(f"Loading pre-trained checkpoint")
+    model.load_state_dict(torch.load(os.path.join(checkpoint_path, 'last.pth.tar'))['state_dict'])
+
+    # print(model)
+
+    criterion = focal_loss.FocalLoss(gamma=3)
+    optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-5)
+
+    # Cyclical LR 스케줄러 초기화
+    cycle_length = 30
+    cyclic_scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=cycle_length, T_mult=1, eta_min=1e-5)
+
+    saver = timm.utils.CheckpointSaver(model, optimizer, checkpoint_dir=save_path, max_history=1)
+
     start_time = time.time()
-    
+
+
+    # Training 루프 수정
     for epoch in range(max_epoch):
+        
+        if epoch % cycle_length == 0:
+            print(f"\nRestoring model to initial checkpoint at the start of cycle {epoch // cycle_length + 1}")
+            model.load_state_dict(torch.load(os.path.join(checkpoint_path, 'last.pth.tar'))['state_dict'])
+
         epoch_start_time = time.time()
-        ## training
+        ## Training
         model.train()
         total_loss = 0
         total = 0
         correct = 0
+
         for batch_idx, (inputs, targets) in enumerate(train_loader):
             targets = targets.type(torch.LongTensor)
-            inputs, targets = inputs.to(device), targets.to(device)           
+            inputs, targets = inputs.to(device), targets.to(device)
             
             if targets.ndim > 1 and targets.size(1) > 1:
                 targets = torch.argmax(targets, dim=1)
-                
             if targets.ndim > 1:
-                targets = targets.view(-1) 
+                targets = targets.view(-1)
             
             optimizer.zero_grad()
-            
+
             features = model.forward_features(inputs)
             features = features[:, 0, :]
             outputs = model.linear(features)
             
             loss = criterion(outputs, targets)
-            loss.backward()            
+            loss.backward()
             optimizer.step()
+
 
             total_loss += loss
             total += targets.size(0)
@@ -155,15 +167,11 @@ def train():
                         % (total_loss/(batch_idx+1), 100.*correct/total, correct, total), end = '')
             train_accuracy = correct/total
                   
-        if epoch < lr_decay_epochs:
-            lr_scheduler_decay.step()
-        else:
-            # Cyclical LR에서 학습률이 저점(base_lr)에 도달했을 때 가중치 저장
-            if optimizer.param_groups[0]['lr'] == 0.000013:
-                print(optimizer.param_groups[0]['lr'])
-                print(cyclic_scheduler.base_lrs[0])
-                torch.save(model.state_dict(), os.path.join(save_path, f'cyclic_checkpoint_epoch{epoch}.pth'))
-            cyclic_scheduler.step()
+
+        # Cyclical LR에서 학습률이 저점(base_lr)에 도달했을 때 가중치 저장
+        if optimizer.param_groups[0]['lr'] <= 0.00002:
+                        torch.save(model.state_dict(), os.path.join(save_path, f'cyclic_checkpoint_epoch{epoch}.pth'))
+        cyclic_scheduler.step()
             
         train_avg_loss = total_loss/len(train_loader)
         epoch_duration = time.time() - epoch_start_time
@@ -182,8 +190,8 @@ def train():
         correct = 0
 
         valid_accuracy = validation_accuracy(model, valid_loader, device)
-        if epoch >= max_epoch-10:
-            avg_accuracy += valid_accuracy 
+        # if epoch >= max_epoch-10:
+        #     avg_accuracy += valid_accuracy 
 
         saver.save_checkpoint(epoch, metric = valid_accuracy)
         
@@ -195,8 +203,8 @@ def train():
     totoal_time = str(timedelta(seconds=total_duration))
     print(f"Total training time: {totoal_time}")
 
-    with open(os.path.join(save_path, 'avgacc.txt'), 'w') as f:
-        f.write(str(avg_accuracy/10))
+    # with open(os.path.join(save_path, 'avgacc.txt'), 'w') as f:
+    #     f.write(str(avg_accuracy/10))
     
 if __name__ =='__main__':
     train()

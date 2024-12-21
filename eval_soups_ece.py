@@ -181,33 +181,17 @@ def train():
     batch_size = int(config['batch_size'])
     
     save_paths = [
-        # os.path.join(config['save_path'], 'reins_ce1'),
-        # os.path.join(config['save_path'], 'reins_ce2'),
-        # os.path.join(config['save_path'], 'reins_ce3'),
-        # os.path.join(config['save_path'], 'reins_ce4'),
+        os.path.join(config['save_path'], 'reins_focal_1'),
+        os.path.join(config['save_path'], 'reins_focal_2'),
+        os.path.join(config['save_path'], 'reins_focal_3'),
+        os.path.join(config['save_path'], 'reins_focal_4'),
+        os.path.join(config['save_path'], 'reins_focal_5'),
         
-        # os.path.join(config['save_path'], 'reins_focal_1'),
-        # os.path.join(config['save_path'], 'reins_focal_2'),
-        # os.path.join(config['save_path'], 'reins_focal_3'),
-        # os.path.join(config['save_path'], 'reins_focal_4'),
-        # os.path.join(config['save_path'], 'reins_focal_5'),
-        
-        os.path.join(config['save_path'], 'lora_focal_1'),
-        os.path.join(config['save_path'], 'lora_focal_2'),
-        os.path.join(config['save_path'], 'lora_focal_3'),
-        os.path.join(config['save_path'], 'lora_focal_4'),
-        os.path.join(config['save_path'], 'lora_focal_5'),
-        
-        # os.path.join(config['save_path'], 'reins_focal_lr_1'),
-        # os.path.join(config['save_path'], 'reins_focal_lr_2'),
-        # os.path.join(config['save_path'], 'reins_focal_lr_3'),
-        # os.path.join(config['save_path'], 'reins_focal_lr_4'),
-        # os.path.join(config['save_path'], 'reins_focal_lr_5'),
-        
-        # os.path.join(config['save_path'], 'reins_adafocal1'),
-        # os.path.join(config['save_path'], 'reins_adafocal2'),
-        # os.path.join(config['save_path'], 'reins_adafocal3'),
-        # os.path.join(config['save_path'], 'reins_adafocal4'),
+        # os.path.join(config['save_path'], 'lora_focal_1'),
+        # os.path.join(config['save_path'], 'lora_focal_2'),
+        # os.path.join(config['save_path'], 'lora_focal_3'),
+        # os.path.join(config['save_path'], 'lora_focal_4'),
+        # os.path.join(config['save_path'], 'lora_focal_5'),
     ]
     
     model_names = [os.path.basename(path) for path in save_paths]

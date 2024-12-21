@@ -67,18 +67,6 @@ def ECE(conf, pred, true, bin_size = 0.1):
         
 def OE(conf, pred, true, bin_size = 0.1):
     
-    """
-    Expected Calibration Error
-    
-    Args:
-        conf (numpy.ndarray): list of confidences
-        pred (numpy.ndarray): list of predictions
-        true (numpy.ndarray): list of true labels
-        bin_size: (float): size of one bin (0,1)  # TODO should convert to number of bins?
-        
-    Returns:
-        ece: expected calibration error
-    """
     true = np.array(true).reshape(-1)  
     pred = np.array(pred).reshape(-1)
     conf = np.array(conf).reshape(-1)

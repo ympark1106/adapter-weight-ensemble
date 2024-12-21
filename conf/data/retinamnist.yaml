@@ -2,7 +2,7 @@ name: bloodmnist
 
 data_root: /home/youmin/workspace/VFMs-Adapters-Ensemble/retinamnist
 batch_size: 32
-epoch: 100
+epoch: 230
 num_classes: 5
 save_path: ./checkpoints/checkpoints_retinamnist
 

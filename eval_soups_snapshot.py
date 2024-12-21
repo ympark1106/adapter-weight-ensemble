@@ -183,17 +183,18 @@ def train():
     batch_size = int(config['batch_size'])
     
     save_paths = [
-        # os.path.join(config['save_path'], 'reins_focal_hydra/cyclic_checkpoint_epoch89.pth'),
-        # os.path.join(config['save_path'], 'reins_focal_hydra/cyclic_checkpoint_epoch119.pth'),
-        # os.path.join(config['save_path'], 'reins_focal_hydra/cyclic_checkpoint_epoch149.pth'),
-        # os.path.join(config['save_path'], 'reins_focal_hydra/cyclic_checkpoint_epoch179.pth'),
-        # os.path.join(config['save_path'], 'reins_focal_hydra/cyclic_checkpoint_epoch209.pth'),
+        
+        # os.path.join(config['save_path'], 'reins_focal_swa/cyclic_checkpoint_epoch99.pth'),
+        # os.path.join(config['save_path'], 'reins_focal_swa/cyclic_checkpoint_epoch129.pth'),
+        # os.path.join(config['save_path'], 'reins_focal_swa/cyclic_checkpoint_epoch159.pth'),
+        # os.path.join(config['save_path'], 'reins_focal_swa/cyclic_checkpoint_epoch189.pth'),
+        # os.path.join(config['save_path'], 'reins_focal_swa/cyclic_checkpoint_epoch219.pth'),
         
         os.path.join(config['save_path'], 'reins_focal_hydra/cyclic_checkpoint_epoch99.pth'),
         os.path.join(config['save_path'], 'reins_focal_hydra/cyclic_checkpoint_epoch129.pth'),
         os.path.join(config['save_path'], 'reins_focal_hydra/cyclic_checkpoint_epoch159.pth'),
-        os.path.join(config['save_path'], 'reins_focal_hydra/cyclic_checkpoint_epoch189.pth'),
-        os.path.join(config['save_path'], 'reins_focal_hydra/cyclic_checkpoint_epoch219.pth'),
+        # os.path.join(config['save_path'], 'reins_focal_hydra/cyclic_checkpoint_epoch189.pth'),
+        # os.path.join(config['save_path'], 'reins_focal_hydra/cyclic_checkpoint_epoch219.pth'),
         
         # os.path.join(config['save_path'], 'lora_focal_hydra/cyclic_checkpoint_epoch99.pth'),
         # os.path.join(config['save_path'], 'lora_focal_hydra/cyclic_checkpoint_epoch129.pth'),
@@ -218,6 +219,7 @@ def train():
         # os.path.join(config['save_path'], 'reins_focal_hydra_1/cyclic_checkpoint_epoch169.pth'),
         # os.path.join(config['save_path'], 'reins_focal_hydra_1/cyclic_checkpoint_epoch209.pth'),
         # os.path.join(config['save_path'], 'reins_focal_hydra_1/cyclic_checkpoint_epoch249.pth'),
+        
 
     ]
     

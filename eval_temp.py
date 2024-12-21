@@ -14,13 +14,13 @@ import timm
 import numpy as np
 from utils import read_conf, validation_accuracy, evaluate, validate, calculate_ece, calculate_nll
 
-from utils.temperature_scaling_manual import ModelWithTemperature
+from utils.temperature_scaling import ModelWithTemperature
 
 import random
 import rein
 import torch.nn.functional as F
 import dino_variant
-from data import cifar10, cifar100, cub, ham10000, bloodmnist, pathmnist
+from data import cifar10, cifar100, cub, ham10000, bloodmnist, pathmnist, retinamnist
 
 
 def rein_forward(model, inputs, temp=1.0, post_temp=False):
@@ -74,6 +74,10 @@ def train():
         train_loader, test_loader, valid_loader = bloodmnist.get_dataloader(batch_size, download=True, num_workers=4)
     elif args.data == 'pathmnist':
         train_loader, test_loader, valid_loader = pathmnist.get_dataloader(batch_size, download=True, num_workers=4)
+    elif args.data == 'retinamnist':
+        _, valid_loader, test_loader = retinamnist.get_dataloader(batch_size=32, download=True, num_workers=4)
+    else:
+        raise ValueError(f"Unsupported data type: {args.data}")
         
         
     if args.netsize == 's':
@@ -98,7 +102,7 @@ def train():
     model.load_state_dict(state_dict, strict=True)
             
     model_temp = ModelWithTemperature(model)
-    print(model_temp)
+    # print(model_temp)
     model_temp.set_temperature(valid_loader, cross_validate='ece')
     temp = model_temp.get_temperature()
     print(f"Optimal Temperature: {temp}")
@@ -116,7 +120,7 @@ def train():
             if args.type == 'rein':
                 output = rein_forward(model_temp, inputs, temp=temp, post_temp=True)
                 # print(output.shape)  
-            probabilities = F.softmax(output, dim=1)  # Softmax로 확률 변환
+                probabilities = F.softmax(output, dim=1)  # Softmax로 확률 변환
             outputs.append(probabilities.cpu())
             targets.append(target.cpu())
     outputs = torch.cat(outputs).numpy()

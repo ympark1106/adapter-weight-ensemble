@@ -41,7 +41,15 @@ for epoch in range(max_epoch):
 
 # Plotting the original LR schedule
 plt.figure(figsize=(12, 7))
-plt.plot(range(epochs), lr_values, label="Snapshot Soup LR Schedule", color='blue')
+
+# Plot Snapshot Soup LR schedule without connecting the end of each cycle to the start of the next
+for epoch in range(70, epochs, cycle_length):
+    start = epoch
+    end = min(epoch + cycle_length, epochs)
+    plt.plot(range(start, end), lr_values[start:end], label=None, color='blue')
+
+# Plot the initial constant and decay phases
+plt.plot(range(70), lr_values[:70], label="Snapshot Soup LR Schedule", color='blue')
 
 # Plotting the MultiStepLR schedule up to max_epoch
 plt.plot(range(max_epoch), lr_multistep, alpha=0.7, label="Single Model LR Schedule", color='red')
@@ -49,11 +57,11 @@ plt.plot(range(max_epoch), lr_multistep, alpha=0.7, label="Single Model LR Sched
 # Adding vertical lines to indicate key points
 plt.axvline(x=70, color='purple', alpha=0.5, label='Branching Point in Snapshot Soup', linestyle='--')
 
-# Labels and title
-plt.xlabel("Epoch")
-plt.ylabel("Learning Rate")
-plt.title("Learning Rate Schedules")
-plt.legend()
+# Labels and title with larger font sizes
+plt.xlabel("Epoch", fontsize=16)
+plt.ylabel("Learning Rate", fontsize=16)
+plt.title("Learning Rate Schedules", fontsize=18)
+plt.legend(fontsize=14, loc='lower center', bbox_to_anchor=(0.5, -0.2))
 plt.grid(True)
 plt.tight_layout()
 plt.show()
