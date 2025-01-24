@@ -1,0 +1,25 @@
+name: cub
+
+data_root: /home/youmin/workspace/VFMs-Adapters-Ensemble/CUB_200_2011
+batch_size: 32
+scale_size: 256
+crop_size: 224
+epoch: 100
+num_classes: 200
+save_path: ./checkpoints/checkpoints_cub
+
+object:
+  trainval:
+    _target_: data.cub.get_train_val_loader
+    data_root: ${data.data_root}
+    batch_size: ${data.batch_size}
+    scale_size: ${data.scale_size}
+    crop_size: ${data.crop_size}
+    num_workers: 4
+  test:
+    _target_: data.cub.get_test_loader
+    data_root: ${data.data_root}
+    batch_size: ${data.batch_size}
+    scale_size: ${data.scale_size}
+    crop_size: ${data.crop_size}
+    num_workers: 4
