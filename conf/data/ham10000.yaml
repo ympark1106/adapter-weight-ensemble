@@ -1,6 +1,6 @@
 name: ham10000
 
-data_root: /home/youmin/workspace/VFMs-Adapters-Ensemble/ham10000/
+data_root: /ailab_mat/dataset/HAM10000
 batch_size: 32
 epoch: 220
 num_classes: 7

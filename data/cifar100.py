@@ -10,7 +10,19 @@ import numpy as np
 
 from torchvision import datasets
 from torchvision import transforms
-from torch.utils.data.sampler import SubsetRandomSampler, SubsetSequentialSampler
+from torch.utils.data import Sampler
+from torch.utils.data.sampler import SubsetRandomSampler#, SubsetSequentialSampler
+
+class SubsetSequentialSampler(Sampler):
+    """Samples elements sequentially, always in the same order."""
+    def __init__(self, indices):
+        self.indices = indices
+
+    def __iter__(self):
+        return iter(self.indices)
+
+    def __len__(self):
+        return len(self.indices)
 
 
 def get_train_valid_loader(batch_size,
@@ -21,7 +33,7 @@ def get_train_valid_loader(batch_size,
                            num_workers=4,
                            pin_memory=False,
                            get_val_temp=0,
-                           data_dir='/home/youmin/workspace/VFMs-Adapters-Ensemble/cifar100'):
+                           data_dir='/ailab_mat/dataset/CIFAR100'):
     """
     Utility function for loading and returning train and valid
     multi-process iterators over the CIFAR-100 dataset. 
