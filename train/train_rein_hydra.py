@@ -52,11 +52,11 @@ def train():
     # if args.data == 'cifar10':
     #     train_loader, valid_loader = cifar10.get_train_valid_loader(batch_size, augment=True, random_seed=42, valid_size=0.1, shuffle=True, num_workers=4, pin_memory=True, get_val_temp=0, data_dir=data_path)
     if args.data == 'cifar100':
-        train_loader, valid_loader = cifar100.get_train_valid_loader(data_dir=data_path, augment=True, batch_size=32, valid_size=0.1, random_seed=42, shuffle=True, num_workers=4, pin_memory=True)
+        train_loader, valid_loader = cifar100.get_train_valid_loader(data_dir=data_path, augment=True, batch_size=batch_size, valid_size=0.1, random_seed=42, shuffle=True, num_workers=4, pin_memory=True)
     # elif args.data == 'cub':
     #     train_loader, valid_loader = cub.get_train_val_loader(data_path, batch_size=32, scale_size=256, crop_size=224, num_workers=8, pin_memory=True)
     elif args.data == 'ham10000':
-        train_loader, valid_loader, test_loader = ham10000.get_dataloaders(data_path, batch_size=32, num_workers=4)
+        train_loader, valid_loader, test_loader = ham10000.get_dataloaders(data_path, batch_size=batch_size, num_workers=4)
     # elif args.data == 'bloodmnist':
     #     train_loader, valid_loader,_ = bloodmnist.get_dataloader(batch_size, download=True, num_workers=4)
     # elif args.data == 'pathmnist':
@@ -121,7 +121,17 @@ def train():
         # 싸이클마다 70번째 에포크 상태로 되돌아감
         if epoch >= cyclic_start_epoch and (epoch - cyclic_start_epoch) % cycle_length == 0:
             print(f"\nRestoring model to checkpoint from epoch {cyclic_start_epoch}")
-            model.load_state_dict(torch.load(checkpoint_path))
+            
+            checkpoint = torch.load(checkpoint_path, map_location=device)
+
+            # DataParallel 모델에서 저장된 경우, 키에서 "module." 제거
+            new_state_dict = {}
+            for k, v in checkpoint.items():
+                new_key = k.replace("module.", "") if k.startswith("module.") else k
+                new_state_dict[new_key] = v
+
+            model.load_state_dict(new_state_dict, strict=False)  # strict=False 설정
+
             cyclic_scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(
                 optimizer, T_0=cycle_length, T_mult=1, eta_min=1e-5
             )

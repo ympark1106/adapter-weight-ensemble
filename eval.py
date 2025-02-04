@@ -2,9 +2,7 @@ import warnings
 warnings.filterwarnings("ignore", message="xFormers is not available")
 
 import os
-os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-os.environ["TORCH_USE_CUDA_DSA"] = '1'
+os.environ["CUDA_VISIBLE_DEVICES"] = "4,5,6,7"
 
 import torch
 import torch.nn as nn
@@ -86,16 +84,14 @@ def train():
         test_loader = cifar10.get_test_loader(batch_size, shuffle=True, num_workers=4, pin_memory=True, get_val_temp=0, data_dir=data_path)
     elif args.data == 'cifar100':
         test_loader = cifar100.get_test_loader(data_dir=data_path, batch_size=32, shuffle=True, num_workers=4, pin_memory=True)
-    elif args.data == 'cub':
-        test_loader = cub.get_test_loader(data_path, batch_size=32, scale_size=256, crop_size=224, num_workers=4, pin_memory=True)
     elif args.data == 'ham10000':
         train_loader, valid_loader, test_loader = ham10000.get_dataloaders(data_path, batch_size=32, num_workers=4)
-    elif args.data == 'bloodmnist':
-        train_loader, test_loader, valid_loader = bloodmnist.get_dataloader(batch_size, download=True, num_workers=4)
-    elif args.data == 'pathmnist':
-        train_loader, test_loader, valid_loader = pathmnist.get_dataloader(batch_size, download=True, num_workers=4)
-    elif args.data == 'retinamnist':
-        train_loader, test_loader, valid_loader = retinamnist.get_dataloader(batch_size, download=True, num_workers=4)
+    # elif args.data == 'bloodmnist':
+    #     train_loader, test_loader, valid_loader = bloodmnist.get_dataloader(batch_size, download=True, num_workers=4)
+    # elif args.data == 'pathmnist':
+    #     train_loader, test_loader, valid_loader = pathmnist.get_dataloader(batch_size, download=True, num_workers=4)
+    # elif args.data == 'retinamnist':
+    #     train_loader, test_loader, valid_loader = retinamnist.get_dataloader(batch_size, download=True, num_workers=4)
         
         
     if args.netsize == 's':
