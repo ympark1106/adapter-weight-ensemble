@@ -73,7 +73,8 @@ def train():
     device = 'cuda:'+args.gpu
     save_path = os.path.join(config['save_path'], args.save_path)
     data_path = config['data_root']
-    batch_size = int(config['batch_size'])
+    # batch_size = int(config['batch_size'])
+    batch_size = 32
 
 
     if not os.path.exists(save_path):
@@ -83,9 +84,9 @@ def train():
     if args.data == 'cifar10':
         test_loader = cifar10.get_test_loader(batch_size, shuffle=True, num_workers=4, pin_memory=True, get_val_temp=0, data_dir=data_path)
     elif args.data == 'cifar100':
-        test_loader = cifar100.get_test_loader(data_dir=data_path, batch_size=32, shuffle=True, num_workers=4, pin_memory=True)
+        test_loader = cifar100.get_test_loader(data_dir=data_path, batch_size=batch_size, shuffle=True, num_workers=4, pin_memory=True)
     elif args.data == 'ham10000':
-        train_loader, valid_loader, test_loader = ham10000.get_dataloaders(data_path, batch_size=32, num_workers=4)
+        train_loader, valid_loader, test_loader = ham10000.get_dataloaders(data_path, batch_size=batch_size, num_workers=4)
     # elif args.data == 'bloodmnist':
     #     train_loader, test_loader, valid_loader = bloodmnist.get_dataloader(batch_size, download=True, num_workers=4)
     # elif args.data == 'pathmnist':
@@ -136,7 +137,7 @@ def train():
     if args.type == 'rein_dropout':
         model.train() # MC Dropout
     else:
-        model.eval()
+        model.eval()        
             
     # print(model)
 

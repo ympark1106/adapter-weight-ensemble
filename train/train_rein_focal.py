@@ -3,13 +3,9 @@ warnings.filterwarnings("ignore", message="xFormers is not available")
 import time
 from datetime import timedelta
 import sys
-sys.path.append("/home/youmin/workspace/VFMs-Adapters-Ensemble/adapter_ensemble")
-
+sys.path.append("/SSDe/youmin_park/adapter-weight-ensemble/")
 import os
-os.environ['KMP_DUPLICATE_LIB_OK']='True'
-os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-os.environ["TORCH_USE_CUDA_DSA"] = '1'
+os.environ["CUDA_VISIBLE_DEVICES"] = "4,5,6,7"
 import torch
 import torch.nn as nn
 
@@ -53,7 +49,8 @@ def train():
     save_path = os.path.join(config['save_path'], args.save_path)
     data_path = config['data_root']
     batch_size = int(config['batch_size'])
-    max_epoch = int(config['epoch'])
+    # max_epoch = int(config['epoch'])
+    max_epoch = 100
     # noise_rate = args.noise_rate
 
     if not os.path.exists(save_path):
