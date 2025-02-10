@@ -25,7 +25,7 @@ import dino_variant
 from sklearn.metrics import f1_score
 from data import cifar10, cifar100, ham10000, bloodmnist, pathmnist, retinamnist
 from losses import RankMixup_MNDCG, RankMixup_MRL, focal_loss, focal_loss_adaptive_gamma
-    
+
 
 def set_requires_grad(model, layers_to_train):
     for name, param in model.named_parameters():
@@ -100,7 +100,7 @@ def train():
     
     print("Max epoch: ", max_epoch)
     
-    criterion = focal_loss.FocalLoss(gamma=3) #gamma 커지면 easy sample에 대한 loss 감소
+    criterion = torch.nn.CrossEntropyLoss()
     model.eval()
 
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay = 1e-5)

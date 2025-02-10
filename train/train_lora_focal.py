@@ -3,13 +3,10 @@ warnings.filterwarnings("ignore", message="xFormers is not available")
 import time
 from datetime import timedelta
 import sys
-sys.path.append("/home/youmin/workspace/VFMs-Adapters-Ensemble/adapter_ensemble")
+sys.path.append("/SSDe/youmin_park/adapter-weight-ensemble/")
 
 import os
-os.environ['KMP_DUPLICATE_LIB_OK']='True'
-os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-os.environ["TORCH_USE_CUDA_DSA"] = '1'
+os.environ["CUDA_VISIBLE_DEVICES"] = "4,5,6,7"
 import torch
 import torch.nn as nn
 
@@ -25,7 +22,7 @@ import rein
 
 import dino_variant
 from sklearn.metrics import f1_score
-from data import cifar10, cifar100, cub, ham10000, bloodmnist, pathmnist, retinamnist
+from data import cifar10, cifar100, ham10000
 from losses import RankMixup_MNDCG, RankMixup_MRL, focal_loss, focal_loss_adaptive_gamma
 
 def count_trainable_params(model):
@@ -41,7 +38,7 @@ def set_requires_grad(model, layers_to_train):
             
 def train():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data', '-d', type=str, default='cub')
+    parser.add_argument('--data', '-d', type=str, default='cifar100')
     parser.add_argument('--gpu', '-g', default = '0', type=str)
     parser.add_argument('--netsize', default='s', type=str)
     parser.add_argument('--save_path', '-s', type=str)
@@ -68,16 +65,14 @@ def train():
         train_loader, valid_loader = cifar10.get_train_valid_loader(batch_size, augment=True, random_seed=42, valid_size=0.1, shuffle=True, num_workers=4, pin_memory=True, get_val_temp=0, data_dir=data_path)
     elif args.data == 'cifar100':
         train_loader, valid_loader = cifar100.get_train_valid_loader(data_dir=data_path, augment=True, batch_size=32, valid_size=0.1, random_seed=42, shuffle=True, num_workers=4, pin_memory=True)
-    elif args.data == 'cub':
-        train_loader, valid_loader = cub.get_train_val_loader(data_path, batch_size=32, scale_size=256, crop_size=224, num_workers=8, pin_memory=True)
     elif args.data == 'ham10000':
         train_loader, valid_loader, _ = ham10000.get_dataloaders(data_path, batch_size=32, num_workers=4)
-    elif args.data == 'bloodmnist':
-        train_loader, valid_loader, _ = bloodmnist.get_dataloader(batch_size=32, download=True, num_workers=4)
-    elif args.data == 'pathmnist':
-        train_loader, valid_loader, _ = pathmnist.get_dataloader(batch_size=32, download=True, num_workers=4)
-    elif args.data == 'retinamnist':
-        train_loader, valid_loader, _ = retinamnist.get_dataloader(batch_size=32, download=True, num_workers=4)
+    # elif args.data == 'bloodmnist':
+    #     train_loader, valid_loader, _ = bloodmnist.get_dataloader(batch_size=32, download=True, num_workers=4)
+    # elif args.data == 'pathmnist':
+    #     train_loader, valid_loader, _ = pathmnist.get_dataloader(batch_size=32, download=True, num_workers=4)
+    # elif args.data == 'retinamnist':
+    #     train_loader, valid_loader, _ = retinamnist.get_dataloader(batch_size=32, download=True, num_workers=4)
     
         
     if args.netsize == 's':

@@ -3,7 +3,7 @@ warnings.filterwarnings("ignore", message="xFormers is not available")
 import contextlib
 import io
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "4,5,6,7"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
 import torch
 import torch.nn as nn
 import argparse
@@ -116,7 +116,7 @@ def greedy_soup_ensemble(models, model_names, valid_loader, device, variant, con
     greedy_soup_ingredients = [sorted_models[0][0]]
     
     TOLERANCE = (sorted_models[-1][1] - sorted_models[0][1]) / 2
-    TOLERANCE = 1
+    TOLERANCE = 0
     print(f'Tolerance: {TOLERANCE}')
 
     for i in range(1, len(models)):
@@ -180,8 +180,7 @@ def train():
     config = read_conf(os.path.join('conf', 'data', f'{args.data}.yaml'))
     device = torch.device(f'cuda:{args.gpu}' if torch.cuda.is_available() else 'cpu')
     data_path = config['data_root']
-    # batch_size = int(config['batch_size'])
-    batch_size = 128
+    batch_size = int(config['batch_size'])
     checkpoint = args.checkpoint
     
     # save_paths = [ 
@@ -202,7 +201,7 @@ def train():
     save_paths = sorted(glob.glob(os.path.join(checkpoint_dir, "cyclic_checkpoint_epoch*.pth")))
 
     # print(save_paths) 
-    print(f'Found {len(save_paths)} models to ensemble.')
+    print(f'Found {len(save_paths)} models to soup.')
     
     
     model_names = [os.path.basename(path) for path in save_paths]

@@ -1,4 +1,9 @@
+import warnings
+warnings.filterwarnings("ignore", message="xFormers is not available")
+
 import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
+
 import torch
 import torch.nn as nn
 import argparse
@@ -6,10 +11,8 @@ import numpy as np
 from torch.cuda.amp.autocast_mode import autocast
 from utils import read_conf, validation_accuracy, ModelWithTemperature, validate, evaluate, calculate_ece, calculate_nll, validation_accuracy_lora
 import dino_variant
-from data import cifar10, cifar100, cub, ham10000, bloodmnist, pathmnist, retinamnist
+from data import cifar10, cifar100, ham10000
 import rein
-
-from losses import DECE
 
 # Model forward function
 def rein_forward(model, inputs):
@@ -80,19 +83,16 @@ def setup_data_loaders(args, data_path, batch_size):
     elif args.data == 'cifar100':
         test_loader = cifar100.get_test_loader(data_dir=data_path, batch_size=32, shuffle=True, num_workers=4, pin_memory=True)
         _, valid_loader = cifar100.get_train_valid_loader(data_dir=data_path, augment=True, batch_size=32, valid_size=0.1, random_seed=42, shuffle=True, num_workers=4, pin_memory=True)
-    elif args.data == 'cub':
-        test_loader = cub.get_test_loader(data_path, batch_size=32, scale_size=256, crop_size=224, num_workers=4, pin_memory=True)
-        _, valid_loader = cub.get_train_val_loader(data_path, batch_size=32, scale_size=256, crop_size=224, num_workers=4, pin_memory=True)
     elif args.data == 'ham10000':
         _, valid_loader, test_loader = ham10000.get_dataloaders(data_path, batch_size=32, num_workers=4)
-    elif args.data == 'bloodmnist':
-        _, valid_loader, test_loader = bloodmnist.get_dataloader(batch_size=32, download=True, num_workers=4)
-    elif args.data == 'pathmnist':
-        _, valid_loader, test_loader = pathmnist.get_dataloader(batch_size=32, download=True, num_workers=4)
-    elif args.data == 'retinamnist':
-        _, valid_loader, test_loader = retinamnist.get_dataloader(batch_size=32, download=True, num_workers=4)
-    else:
-        raise ValueError(f"Unsupported data type: {args.data}")
+    # elif args.data == 'bloodmnist':
+    #     _, valid_loader, test_loader = bloodmnist.get_dataloader(batch_size=32, download=True, num_workers=4)
+    # elif args.data == 'pathmnist':
+    #     _, valid_loader, test_loader = pathmnist.get_dataloader(batch_size=32, download=True, num_workers=4)
+    # elif args.data == 'retinamnist':
+    #     _, valid_loader, test_loader = retinamnist.get_dataloader(batch_size=32, download=True, num_workers=4)
+    # else:
+    #     raise ValueError(f"Unsupported data type: {args.data}")
     
     return test_loader, valid_loader
 
@@ -114,7 +114,7 @@ def greedy_soup_ensemble(models, model_names, valid_loader, device, variant, con
     greedy_soup_ingredients = [sorted_models[0][0]]
     
     TOLERANCE = (sorted_models[-1][1] - sorted_models[0][1]) / 2
-    TOLERANCE = 1
+    TOLERANCE = 0
     print(f'Tolerance: {TOLERANCE}')
 
     for i in range(1, len(models)):
@@ -169,7 +169,7 @@ def greedy_soup_ensemble(models, model_names, valid_loader, device, variant, con
 
 def train():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data', '-d', type=str, default='cub')
+    parser.add_argument('--data', '-d', type=str, default='cifar100')
     parser.add_argument('--gpu', '-g', default='0', type=str)
     parser.add_argument('--netsize', default='s', type=str)
     parser.add_argument('--type', '-t', default='rein', type=str)
@@ -186,6 +186,11 @@ def train():
         os.path.join(config['save_path'], 'reins_focal_3'),
         os.path.join(config['save_path'], 'reins_focal_4'),
         os.path.join(config['save_path'], 'reins_focal_5'),
+        os.path.join(config['save_path'], 'reins_focal_6'),
+        os.path.join(config['save_path'], 'reins_focal_7'),
+        os.path.join(config['save_path'], 'reins_focal_8'),
+        os.path.join(config['save_path'], 'reins_focal_9'),
+        os.path.join(config['save_path'], 'reins_focal_10'),
         
         # os.path.join(config['save_path'], 'lora_focal_1'),
         # os.path.join(config['save_path'], 'lora_focal_2'),
@@ -203,7 +208,7 @@ def train():
     
     for save_path in save_paths:
         model = initialize_model(variant, config, device, args)
-        state_dict = torch.load(os.path.join(save_path, 'last.pth.tar'), map_location='cpu')['state_dict']
+        state_dict = torch.load(os.path.join(save_path, 'last.pth.tar'), map_location=device)['state_dict']
         model.load_state_dict(state_dict, strict=False)
         model.to(device)
         model.eval()

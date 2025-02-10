@@ -32,7 +32,7 @@ def set_requires_grad(model, layers_to_train):
             
 def train():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data', '-d', type=str, default='cub')
+    parser.add_argument('--data', '-d', type=str, default='cifar100')
     parser.add_argument('--gpu', '-g', default = '0', type=str)
     parser.add_argument('--netsize', default='s', type=str)
     parser.add_argument('--save_path', '-s', type=str)
