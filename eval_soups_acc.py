@@ -2,7 +2,7 @@ import warnings
 warnings.filterwarnings("ignore", message="xFormers is not available")
 
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "4,5,6,7"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
 import torch
 import torch.nn as nn
 import argparse
@@ -200,16 +200,16 @@ def train():
     batch_size = int(config['batch_size'])
     
     save_paths = [
-        os.path.join(config['save_path'], 'reins_focal_1'),
-        os.path.join(config['save_path'], 'reins_focal_2'),
-        os.path.join(config['save_path'], 'reins_focal_3'),
-        os.path.join(config['save_path'], 'reins_focal_4'),
-        os.path.join(config['save_path'], 'reins_focal_5'),
-        os.path.join(config['save_path'], 'reins_focal_6'),
-        os.path.join(config['save_path'], 'reins_focal_7'),
-        os.path.join(config['save_path'], 'reins_focal_8'),
-        os.path.join(config['save_path'], 'reins_focal_9'),
-        os.path.join(config['save_path'], 'reins_focal_10'),
+        # os.path.join(config['save_path'], 'reins_focal_1'),
+        # os.path.join(config['save_path'], 'reins_focal_2'),
+        # os.path.join(config['save_path'], 'reins_focal_3'),
+        # os.path.join(config['save_path'], 'reins_focal_4'),
+        # os.path.join(config['save_path'], 'reins_focal_5'),
+        # os.path.join(config['save_path'], 'reins_focal_6'),
+        # os.path.join(config['save_path'], 'reins_focal_7'),
+        # os.path.join(config['save_path'], 'reins_focal_8'),
+        # os.path.join(config['save_path'], 'reins_focal_9'),
+        # os.path.join(config['save_path'], 'reins_focal_10'),
     ]
     
     model_names = [os.path.basename(path) for path in save_paths]

@@ -6,7 +6,7 @@ import sys
 sys.path.append("/SSDe/youmin_park/adapter-weight-ensemble/")
 
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "4,5,6,7"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
 import torch
 import torch.nn as nn
 
@@ -52,7 +52,8 @@ def train():
     save_path = os.path.join(config['save_path'], args.save_path)
     data_path = config['data_root']
     batch_size = int(config['batch_size'])
-    max_epoch = int(config['epoch'])
+    # max_epoch = int(config['epoch'])
+    max_epoch = 100
     # noise_rate = args.noise_rate
 
     if not os.path.exists(save_path):

@@ -5,7 +5,7 @@ from datetime import timedelta
 import sys
 sys.path.append("/SSDe/youmin_park/adapter-weight-ensemble/")
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "4,5,6,7"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
 import torch
 import torch.nn as nn
 
@@ -35,7 +35,7 @@ def set_requires_grad(model, layers_to_train):
             
 def train():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data', '-d', type=str, default='cub')
+    parser.add_argument('--data', '-d', type=str, default='cifar100')
     parser.add_argument('--gpu', '-g', default = '0', type=str)
     parser.add_argument('--netsize', default='s', type=str)
     parser.add_argument('--save_path', '-s', type=str)

@@ -2,7 +2,7 @@ import warnings
 warnings.filterwarnings("ignore", message="xFormers is not available")
 
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "4,5,6,7"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
 
 import torch
 import torch.nn as nn
@@ -61,7 +61,7 @@ def resnet_forward(model, inputs):
 
 def train():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data', '-d', type=str, default='cifar10')
+    parser.add_argument('--data', '-d', type=str, default='cifar100')
     parser.add_argument('--gpu', '-g', default = '0', type=str)
     parser.add_argument('--netsize', default='s', type=str)
     parser.add_argument('--save_path', '-s', type=str)
@@ -129,8 +129,8 @@ def train():
         model.to(device)
 
 
-    # state_dict = torch.load(os.path.join(save_path, 'last.pth.tar'), map_location='cpu')['state_dict']
-    state_dict = torch.load(os.path.join(save_path, 'cyclic_checkpoint_epoch129.pth'), map_location='cpu')
+    # state_dict = torch.load(os.path.join(save_path, 'last.pth.tar'), map_location=device)['state_dict']
+    state_dict = torch.load(os.path.join(save_path, 'cyclic_checkpoint_epoch669.pth'), map_location=device)
     # state_dict = torch.load(os.path.join(save_path, 'checkpoint_epoch_70.pth'), map_location='cpu')
     model.load_state_dict(state_dict, strict=True)
     

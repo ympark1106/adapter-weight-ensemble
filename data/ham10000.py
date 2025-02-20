@@ -53,12 +53,12 @@ def get_dataloaders(data_dir, batch_size=32, num_workers=4):
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     ])
     
-    train_csv = data_dir + 'ISIC2018_Task3_Training_GroundTruth.csv'
-    valid_csv = data_dir + 'ISIC2018_Task3_Validation_GroundTruth.csv'
-    test_csv = data_dir + 'ISIC2018_Task3_Test_GroundTruth.csv'
-    train_dir = data_dir + 'train'
-    valid_dir = data_dir + 'valid'
-    test_dir = data_dir + 'test'
+    train_csv = data_dir + '/ISIC2018_Task3_Training_GroundTruth.csv'
+    valid_csv = data_dir + '/ISIC2018_Task3_Validation_GroundTruth.csv'
+    test_csv = data_dir + '/ISIC2018_Task3_Test_GroundTruth.csv'
+    train_dir = data_dir + '/train'
+    valid_dir = data_dir + '/valid'
+    test_dir = data_dir + '/test'
     
     # Datasets
     train_dataset = HAM10000Dataset(csv_file=train_csv, root_dir=train_dir, transform=train_transform)

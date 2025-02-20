@@ -1,7 +1,7 @@
 name: ham10000
 
-data_root: /ailab_mat/dataset/HAM10000
+data_root: /SSDe/youmin_park/ham10000
 batch_size: 32
-epoch: 220
+epoch: 460
 num_classes: 7
 save_path: ./checkpoints/checkpoints_ham10000

@@ -4,7 +4,7 @@ import sys
 sys.path.append("/home/youmin/workspace/VFMs-Adapters-Ensemble/adapter_ensemble")
 
 import os
-os.environ['CUDA_LAUNCH_BLOCKING'] = '4,5'
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
 
 import torch
 import torch.nn as nn

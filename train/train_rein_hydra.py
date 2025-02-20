@@ -6,7 +6,7 @@ import time
 from datetime import timedelta
 
 import os
-os.environ["CUDA_VISIBLE_DEVICES"] = "4,5,6,7"
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
 import torch
 import torch.nn as nn
 
