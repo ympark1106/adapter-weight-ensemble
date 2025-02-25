@@ -96,11 +96,11 @@ def train():
 
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay = 1e-5)
     
-    lr_decay_epochs = 70
+    lr_decay_epochs = 50
     lr_scheduler_decay = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[50, 70], gamma=0.1)
 
     cyclic_start_epoch = lr_decay_epochs  
-    cycle_length = 30        
+    cycle_length = 50        
     cyclic_epochs = max_epoch - cyclic_start_epoch  
     print(f"Total cyclic epochs: {cyclic_epochs}")
 

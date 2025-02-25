@@ -50,31 +50,73 @@ def setup_data_loaders(args, data_path, batch_size):
     return test_loader, valid_loader
 
 
-# Model initialization
+# # Model initialization
+# def initialize_model(variant, config, device, args):
+#     model_load = dino_variant._small_dino
+#     dino = torch.hub.load('facebookresearch/dinov2', model_load)
+#     dino_state_dict = dino.state_dict()
+
+#     if args.type == 'rein':
+#         model = rein.ReinsDinoVisionTransformer(
+#             **variant
+#         )
+#         model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
+#         model.load_state_dict(dino_state_dict, strict=False)
+#         model.to(device)
+
+#     elif args.type == 'lora':
+#         new_state_dict = dict()
+#         for k in dino_state_dict.keys():
+#             new_k = k.replace("attn.qkv", "attn.qkv.qkv")
+#             new_state_dict[new_k] = dino_state_dict[k]
+#         model = rein.LoRADinoVisionTransformer(dino)
+#         model.dino.load_state_dict(new_state_dict, strict=False)
+#         model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
+#         model.to(device)
+        
+#     return model
+
 def initialize_model(variant, config, device, args):
     model_load = dino_variant._small_dino
     dino = torch.hub.load('facebookresearch/dinov2', model_load)
     dino_state_dict = dino.state_dict()
 
+    # ReinsDinoVisionTransformer 모델 생성
     if args.type == 'rein':
-        model = rein.ReinsDinoVisionTransformer(
-            **variant
-        )
+        model = rein.ReinsDinoVisionTransformer(**variant)
         model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
-        model.load_state_dict(dino_state_dict, strict=False)
-        model.to(device)
-
     elif args.type == 'lora':
-        new_state_dict = dict()
-        for k in dino_state_dict.keys():
+        # LoRA 계열 모델은 attn.qkv를 attn.qkv.qkv로 rename
+        new_state_dict = {}
+        for k, v in dino_state_dict.items():
             new_k = k.replace("attn.qkv", "attn.qkv.qkv")
-            new_state_dict[new_k] = dino_state_dict[k]
+            new_state_dict[new_k] = v
+        dino_state_dict = new_state_dict
+
         model = rein.LoRADinoVisionTransformer(dino)
-        model.dino.load_state_dict(new_state_dict, strict=False)
         model.linear = nn.Linear(variant['embed_dim'], config['num_classes'])
-        model.to(device)
-        
+
+    # --------------------------------------------------------------------
+    # (A) 모델 전체 state_dict 불러옴 (아직은 랜덤 초기화 파라미터 포함)
+    model_dict = model.state_dict()
+
+    # (B) DINO state_dict 중 현재 모델 키/shape와 일치하는 항목만 filtering
+    filtered_dict = {}
+    for k, v in dino_state_dict.items():
+        if k in model_dict and model_dict[k].shape == v.shape:
+            filtered_dict[k] = v
+
+    # (C) 모델 dict에 DINO 파라미터를 덮어씌움
+    model_dict.update(filtered_dict)
+
+    # (D) strict=True로 최종 로딩 (filtered_dict 외 키는 그대로)
+    model.load_state_dict(model_dict, strict=True)
+    # --------------------------------------------------------------------
+
+    model.to(device)
     return model
+
+
 
 def get_model_from_sd(state_dict, variant, config, device, args):
     if args.type == 'rein':
@@ -200,16 +242,16 @@ def train():
     batch_size = int(config['batch_size'])
     
     save_paths = [
-        # os.path.join(config['save_path'], 'reins_focal_1'),
-        # os.path.join(config['save_path'], 'reins_focal_2'),
-        # os.path.join(config['save_path'], 'reins_focal_3'),
-        # os.path.join(config['save_path'], 'reins_focal_4'),
-        # os.path.join(config['save_path'], 'reins_focal_5'),
-        # os.path.join(config['save_path'], 'reins_focal_6'),
-        # os.path.join(config['save_path'], 'reins_focal_7'),
-        # os.path.join(config['save_path'], 'reins_focal_8'),
-        # os.path.join(config['save_path'], 'reins_focal_9'),
-        # os.path.join(config['save_path'], 'reins_focal_10'),
+        os.path.join(config['save_path'], 'reins_focal_1'),
+        os.path.join(config['save_path'], 'reins_focal_2'),
+        os.path.join(config['save_path'], 'reins_focal_3'),
+        os.path.join(config['save_path'], 'reins_focal_4'),
+        os.path.join(config['save_path'], 'reins_focal_5'),
+        os.path.join(config['save_path'], 'reins_focal_6'),
+        os.path.join(config['save_path'], 'reins_focal_7'),
+        os.path.join(config['save_path'], 'reins_focal_8'),
+        os.path.join(config['save_path'], 'reins_focal_9'),
+        os.path.join(config['save_path'], 'reins_focal_10'),
     ]
     
     model_names = [os.path.basename(path) for path in save_paths]
@@ -221,7 +263,7 @@ def train():
     for save_path in save_paths:
         model = initialize_model(variant, config, device, args)
         state_dict = torch.load(os.path.join(save_path, 'last.pth.tar'), map_location=device)['state_dict']
-        model.load_state_dict(state_dict, strict=False)
+        model.load_state_dict(state_dict, strict=True)
         model.to(device)
         model.eval()
         models.append(model)
