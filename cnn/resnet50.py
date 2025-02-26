@@ -1,8 +1,9 @@
 import warnings
 warnings.filterwarnings("ignore", message="xFormers is not available")
 import sys
-sys.path.append("/home/youmin/workspace/VFMs-Adapters-Ensemble/adapter_ensemble")
+sys.path.append("/SSDe/youmin_park/adapter-weight-ensemble/")
 import os
+os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5,6,7"
 import time
 from datetime import timedelta
 import torch
@@ -13,9 +14,8 @@ import numpy as np
 from torchvision import models
 
 from utils import read_conf, validation_accuracy, ModelWithTemperature, validate, evaluate
-from data import cifar10, ham10000
-
-device = 'cuda:0'
+from losses import RankMixup_MNDCG, RankMixup_MRL, focal_loss, focal_loss_adaptive_gamma
+from data import cifar10, ham10000, cifar100
 
 def train():
     parser = argparse.ArgumentParser()
@@ -29,7 +29,8 @@ def train():
     save_path = os.path.join(config['save_path'], args.save_path)
     data_path = config['data_root']
     batch_size = int(config['batch_size'])
-    max_epoch = int(config['epoch'])
+    # max_epoch = int(config['epoch'])
+    max_epoch = 100
 
     if not os.path.exists(save_path):
         os.mkdir(save_path)
@@ -38,6 +39,8 @@ def train():
 
     if args.data == 'cifar10':
         train_loader, valid_loader = cifar10.get_train_valid_loader(batch_size, augment=True, random_seed=42, valid_size=0.1, shuffle=True, num_workers=4, pin_memory=True, get_val_temp=0, data_dir=data_path)
+    elif args.data == 'cifar100':
+        train_loader, valid_loader = cifar100.get_train_valid_loader(data_dir=data_path, augment=True, batch_size=32, valid_size=0.1, random_seed=42, shuffle=True, num_workers=4, pin_memory=True)
     elif args.data == 'ham10000':
         train_loader, valid_loader, test_loader = ham10000.get_dataloaders(data_path, batch_size=32, num_workers=4)
     
@@ -48,10 +51,16 @@ def train():
     model.eval()
     
     criterion = nn.CrossEntropyLoss()
+    # criterion = focal_loss.FocalLoss(gamma=3)
+    
     optimizer = torch.optim.SGD(model.parameters(), lr=0.1,
                         momentum=0.9, weight_decay=5e-4)
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=100)
+
+    # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=100)
+    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=lr_decay, gamma=0.1)
+    
     saver = timm.utils.CheckpointSaver(model, optimizer, checkpoint_dir= save_path, max_history = 1) 
+    
 
     
     avg_accuracy = 0.0
